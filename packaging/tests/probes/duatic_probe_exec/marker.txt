@@ -1,0 +1,2 @@
+Placeholder so the package installs at least one file. Stands in for the launch file or Python
+node that would use duatic_helper_msgs at runtime without ever building against it.
