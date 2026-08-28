@@ -5,7 +5,7 @@ One ROS package in, one `.deb` out, then index it, publish it and install it.
 `workspace/build_all.sh` drives these scripts over the whole release set. Use them directly when
 working on a single package.
 
-Paths below assume the repository is at `~/duatic_devtools`.
+Run these from this directory.
 
 ## Build one package
 
@@ -14,9 +14,9 @@ docker run --rm -it \
   -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
   -e ROSDEP_YAML=/rosdep/<your-mapping>.yaml \
   -v <source repository>:/src \
-  -v ~/duatic_devtools/packaging/builder:/builder \
-  -v ~/duatic_devtools/packaging/builder/rosdep:/rosdep \
-  -v ~/duatic_devtools/packaging/builder/out:/out \
+  -v "$PWD:/builder" \
+  -v "$PWD/rosdep:/rosdep" \
+  -v "$PWD/out:/out" \
   ros:jazzy-ros-base \
   /builder/build_pkg.sh <ros package name>
 ```
@@ -41,7 +41,7 @@ Each built package carries the commit it came from, so a `.deb` in the field can
 a tree:
 
 ```bash
-dpkg -s ros-jazzy-duatic-helper-msgs | grep Duatic-Vcs
+dpkg -s <package> | grep Duatic-Vcs
 ```
 
 A build from a tree with uncommitted changes is marked `-dirty`. If the source is not a git
@@ -61,9 +61,9 @@ number of package files and the number of indexed packages disagree.
 
 ```bash
 docker run --rm -it \
-  -v ~/duatic_devtools/packaging/builder:/builder \
-  -v ~/duatic_devtools/packaging/builder/out:/out \
-  -v ~/duatic_devtools/packaging/builder/dist:/dist \
+  -v "$PWD:/builder" \
+  -v "$PWD/out:/out" \
+  -v "$PWD/dist:/dist" \
   ros:jazzy-ros-base \
   /builder/publish.sh [stamp]
 ```
