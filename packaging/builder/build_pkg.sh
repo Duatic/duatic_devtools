@@ -4,7 +4,7 @@
 # CHANGELOG.rst is written back to the mounted repo. The build uses a scratch copy so debian/
 # and the .deb never land in git.
 #
-# Usage:  /builder/build_pkg.sh duatic_helper_msgs
+# Usage:  /builder/build_pkg.sh <ros package name>
 
 set -euo pipefail
 

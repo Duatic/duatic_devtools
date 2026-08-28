@@ -18,8 +18,8 @@ CONF=/tmp/aptly.conf
 # aptly keeps all state in rootDir. The default is discarded when a --rm container exits, and
 # promotion needs the earlier snapshots.
 STAMP="${1:-$(date +%Y%m%d%H%M%S)}"
-KEY_NAME="Duatic Archive"
-KEY_EMAIL="apt@duatic.invalid"
+KEY_NAME="${KEY_NAME:-Archive Signing Key}"
+KEY_EMAIL="${KEY_EMAIL:-apt@example.invalid}"
 
 HOST_UID="${HOST_UID:-0}"
 HOST_GID="${HOST_GID:-0}"
@@ -100,10 +100,18 @@ add_if_present() {
 
 echo "--- adding packages"
 shopt -s nullglob
-add_if_present duatic-public  "$OUT"/ros-${ROS_DISTRO_TARGET}-duatic-helper-msgs_*.deb
-# A .ddeb is the same format with a different extension.
-add_if_present duatic-public  "$OUT"/ros-${ROS_DISTRO_TARGET}-duatic-helper-msgs-dbgsym_*.ddeb
-add_if_present duatic-private "$OUT"/ros-${ROS_DISTRO_TARGET}-duatic-probe-exec_*.deb
+# Which package goes to which repository is the caller's decision, as space separated globs
+# relative to $OUT. A .ddeb is the same format with a different extension, so both are matched.
+for pat in ${PUBLIC_PACKAGES:-}; do
+    add_if_present duatic-public "$OUT"/${pat}_*.deb
+    add_if_present duatic-public "$OUT"/${pat}-dbgsym_*.ddeb
+done
+for pat in ${PRIVATE_PACKAGES:-}; do
+    add_if_present duatic-private "$OUT"/${pat}_*.deb
+    add_if_present duatic-private "$OUT"/${pat}-dbgsym_*.ddeb
+done
+[ -n "${PUBLIC_PACKAGES:-}${PRIVATE_PACKAGES:-}" ] \
+    || echo "    nothing selected: set PUBLIC_PACKAGES and/or PRIVATE_PACKAGES" >&2
 shopt -u nullglob
 
 echo
