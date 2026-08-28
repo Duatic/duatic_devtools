@@ -1,0 +1,9 @@
+# The release set: <visibility> <name> <clone url>
+#
+# Copy to repos.txt and fill in. PUBLIC is cloned anonymously; PRIVATE needs a credential and is
+# cloned only with PRIVATE=1. The visibility column is verified against the host by
+# verify_isolation.sh, so a typo or a repository that changed visibility is caught rather than
+# silently changing what gets released.
+
+PUBLIC   my_public_pkg    https://github.com/<org>/my_public_pkg.git
+PRIVATE  my_private_pkg   https://github.com/<org>/my_private_pkg.git
