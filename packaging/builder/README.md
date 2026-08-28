@@ -12,24 +12,26 @@ Paths below assume the repository is at `~/duatic_devtools`.
 ```bash
 docker run --rm -it \
   -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
-  -e ROSDEP_YAML=/rosdep/duatic-jazzy.yaml \
+  -e ROSDEP_YAML=/rosdep/<your-mapping>.yaml \
   -v <source repository>:/src \
   -v ~/duatic_devtools/packaging/builder:/builder \
   -v ~/duatic_devtools/packaging/builder/rosdep:/rosdep \
   -v ~/duatic_devtools/packaging/builder/out:/out \
   ros:jazzy-ros-base \
-  /builder/build_pkg.sh duatic_helper_msgs
+  /builder/build_pkg.sh <ros package name>
 ```
 
 `HOST_UID` and `HOST_GID` are needed on Linux: the container runs as root, so without them the
 `CHANGELOG.rst` written back into the source repository is root-owned.
 
-`ROSDEP_YAML` is optional. Without it a `<depend>` on another Duatic package resolves to nothing,
-and bloom does not treat that as an error.
+`ROSDEP_YAML` is optional, and points at a mapping from ROS package name to Debian package name
+for anything outside the public rosdistro index. Without it such a `<depend>` resolves to nothing,
+and bloom does not treat that as an error. `rosdep/example.yaml` is the format;
+`workspace/gen_release_set.sh` generates the real ones for a whole release set.
 
 The image sets both the ROS distro and the architecture. Swap `ros:jazzy-ros-base` for
-`ros:kilted-ros-base` and the matching `rosdep/duatic-kilted.yaml` to build for kilted; the distro
-ends up in the Debian package name, so the two never collide. The images are multi-arch, so an
+`ros:kilted-ros-base` and the matching mapping to build for kilted; the distro ends up in the
+Debian package name, so the two never collide. The images are multi-arch, so an
 amd64 host produces an amd64 package. For arm64, build on an arm64 machine or pass
 `--platform linux/arm64`.
 

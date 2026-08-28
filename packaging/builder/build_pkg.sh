@@ -50,7 +50,7 @@ if [ -n "${ROSDEP_YAML:-}" ]; then
     [ -f "$ROSDEP_YAML" ] || { echo "FATAL: ROSDEP_YAML=$ROSDEP_YAML does not exist" >&2; exit 1; }
     echo "    private rosdep source: $ROSDEP_YAML"
     # Sorts before 20-default.list, so it is consulted first.
-    echo "yaml file://$ROSDEP_YAML" > /etc/ros/rosdep/sources.list.d/10-duatic.list
+    echo "yaml file://$ROSDEP_YAML" > /etc/ros/rosdep/sources.list.d/10-local.list
 else
     echo "    NO private rosdep source: Duatic dependencies will not resolve"
 fi
