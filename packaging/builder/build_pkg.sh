@@ -103,9 +103,41 @@ echo "--- bloom-generate rosdebian"
 bloom-generate rosdebian \
     --os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
 
+# Where this package came from. A version says which release it is; only the commit says what it
+# was built from. dpkg-gencontrol copies XB- fields into the binary package with the prefix
+# stripped, so a robot can answer this with `dpkg -s`.
+GIT_COMMIT="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
+if [ "$GIT_COMMIT" != "unknown" ] && ! git -C "$SRC" diff --quiet HEAD 2>/dev/null; then
+    GIT_COMMIT="$GIT_COMMIT-dirty"
+fi
+GIT_URL="$(git -C "$SRC" config --get remote.origin.url 2>/dev/null || echo unknown)"
+echo "--- source $GIT_COMMIT"
+python3 - "$GIT_COMMIT" "$GIT_URL" <<'PYCTL'
+import sys, pathlib
+commit, url = sys.argv[1], sys.argv[2]
+p = pathlib.Path('debian/control')
+stanzas = p.read_text().split('\n\n')
+out = []
+for st in stanzas:
+    if not st.strip():
+        continue
+    lines = st.rstrip('\n').split('\n')
+    if st.startswith('Source:') and url != 'unknown':
+        lines.append(f'Vcs-Git: {url}')
+    elif st.startswith('Package:'):
+        add = [f'XB-Duatic-Vcs-Commit: {commit}']
+        if url != 'unknown':
+            add.append(f'XB-Duatic-Vcs-Url: {url}')
+        # Before Description, which continues over following indented lines and has to stay last.
+        at = next((i for i, l in enumerate(lines) if l.startswith('Description:')), len(lines))
+        lines[at:at] = add
+    out.append('\n'.join(lines))
+p.write_text('\n\n'.join(out) + '\n')
+PYCTL
+
 echo
 echo "--- generated debian/control (inspect the dependencies):"
-grep -E '^(Package|Source|Architecture|Depends|Build-Depends):' debian/control || true
+grep -E '^(Package|Source|Architecture|Depends|Build-Depends|XB-Duatic|Vcs-):' debian/control || true
 echo
 
 # ---------------------------------------------------------------- 4. build
