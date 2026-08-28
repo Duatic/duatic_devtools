@@ -1,0 +1,6 @@
+# Signing keys and built output.
+gnupg/
+dist/
+out/
+aptly/
+repo/
