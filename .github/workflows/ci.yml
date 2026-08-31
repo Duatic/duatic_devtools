@@ -54,6 +54,9 @@ jobs:
               has '(\.sh$|^release/.*\.py$)'           && echo "shell=true"   || echo "shell=false"
           } >> "$GITHUB_OUTPUT"
 
+  format:
+    uses: Duatic/ci-workflows/.github/workflows/pre-commit.yml@v1
+
   # Every script, every time one of them changes. Catches the unbound variable and the typo that
   # only show up on the unhappy path.
   lint:
