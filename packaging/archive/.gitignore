@@ -1,0 +1,11 @@
+# Signing key material. archive-key/ is where make_archive_key.sh writes by default, and holds a
+# private key.
+gnupg/
+archive-key/
+
+# Generated: the package lists, the rosdep mapping, and the published tree.
+lists/
+rosdep/
+dist/
+out/
+aptly/
