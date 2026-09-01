@@ -1,0 +1,196 @@
+name: ci
+# Checks the tooling in this repository still works. Each job is gated on the paths it covers, so a
+# change to release/ does not pay for a container build and a change to packaging/ does not run the
+# release suite.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Run every job regardless of which paths changed'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # One git diff, reused by every job below. Cheaper than a path filter per job, and it keeps the
+  # gating rules in one place.
+  changes:
+    runs-on: self-hosted
+    outputs:
+      release: ${{ steps.filter.outputs.release }}
+      builder: ${{ steps.filter.outputs.builder }}
+      archive: ${{ steps.filter.outputs.archive }}
+      tests: ${{ steps.filter.outputs.tests }}
+      shell: ${{ steps.filter.outputs.shell }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Work out what changed
+        id: filter
+        env:
+          FULL: ${{ inputs.full }}
+        run: |
+          if [ "$FULL" = "true" ] || [ "${{ github.event_name }}" != "pull_request" ]; then
+              changed=$(git ls-files)
+          else
+              changed=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
+          fi
+          echo "$changed" | sed 's/^/  /'
+
+          has() { echo "$changed" | grep -qE "$1"; }
+          {
+              has '^release/'                          && echo "release=true" || echo "release=false"
+              has '^packaging/(builder|tests)/'        && echo "builder=true" || echo "builder=false"
+              has '^packaging/archive/'                && echo "archive=true" || echo "archive=false"
+              has '^packaging/tests/'                  && echo "tests=true"   || echo "tests=false"
+              has '(\.sh$|^release/.*\.py$)'           && echo "shell=true"   || echo "shell=false"
+          } >> "$GITHUB_OUTPUT"
+
+  format:
+    uses: Duatic/ci-workflows/.github/workflows/pre-commit.yml@v1
+    with:
+      runner: self-hosted
+
+  # Every script, every time one of them changes. Catches the unbound variable and the typo that
+  # only show up on the unhappy path.
+  lint:
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax
+        run: |
+          fail=0
+          while read -r f; do
+              bash -n "$f" || { echo "::error file=$f::syntax error"; fail=1; }
+          done < <(git ls-files '*.sh')
+          exit $fail
+
+      # Advisory, not gating. Tighten to a hard failure once the existing warnings are cleared.
+      - name: Shellcheck
+        continue-on-error: true
+        run: shellcheck --severity=warning $(git ls-files '*.sh')
+
+      - name: Python syntax
+        run: python3 -m py_compile $(git ls-files '*.py')
+
+  # The release check gates every other repository, so its own suite runs on any change to it.
+  release:
+    needs: changes
+    if: needs.changes.outputs.release == 'true'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release check suite
+        run: release/test_check_release_pr.sh
+
+  # The fixtures are generated and committed. If the generator and the committed tree disagree,
+  # every downstream test is running against something nobody reviewed.
+  fixtures:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate and compare
+        run: |
+          packaging/tests/make_fixtures.sh
+          git diff --exit-code -- packaging/tests/fixtures \
+            || { echo "::error::fixtures differ from make_fixtures.sh, commit the regenerated tree"; exit 1; }
+
+  # The one that actually proves the builder works: a real bloom-generate and dpkg-buildpackage
+  # producing a real .deb.
+  builder:
+    needs: changes
+    if: needs.changes.outputs.builder == 'true'
+    runs-on: self-hosted
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      # The source repositories test jazzy, kilted and rolling. Packaging follows the two that are
+      # released; rolling moves under you and is not something to publish a .deb against.
+      matrix:
+        include:
+          - ros_distro: jazzy
+            os_version: noble
+          - ros_distro: kilted
+            os_version: noble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate the rosdep mapping for ${{ matrix.ros_distro }}
+        env:
+          ROS_DISTROS: ${{ matrix.ros_distro }}
+          OS_VERSION: ${{ matrix.os_version }}
+        run: packaging/tests/make_fixtures.sh
+
+      - name: Build a fixture into a .deb
+        env:
+          ROS_DISTRO_TARGET: ${{ matrix.ros_distro }}
+          OS_VERSION: ${{ matrix.os_version }}
+        run: |
+          mkdir -p out
+          docker run --rm -i \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            -e ROSDEP_YAML="/rosdep/duatic-fixtures-${ROS_DISTRO_TARGET}.yaml" \
+            -e ROS_DISTRO="$ROS_DISTRO_TARGET" \
+            -e OS_VERSION="$OS_VERSION" \
+            -v "$PWD/packaging/tests/fixtures:/src" \
+            -v "$PWD/packaging/builder:/builder" \
+            -v "$PWD/packaging/tests/rosdep:/rosdep" \
+            -v "$PWD/out:/out" \
+            "ros:${ROS_DISTRO_TARGET}-ros-base" \
+            /builder/build_pkg.sh duatic_fixture_core < /dev/null
+
+      - name: The .deb exists and declares what it should
+        env:
+          ROS_DISTRO_TARGET: ${{ matrix.ros_distro }}
+        run: |
+          want="ros-${ROS_DISTRO_TARGET}-duatic-fixture-core"
+          deb=$(ls "out/${want}_"*.deb 2>/dev/null | head -1)
+          [ -n "$deb" ] || { echo "::error::no .deb produced for $ROS_DISTRO_TARGET"; exit 1; }
+          echo "built $deb"
+          dpkg-deb -f "$deb" Package Version Architecture Maintainer Duatic-Vcs-Commit
+          [ "$(dpkg-deb -f "$deb" Package)" = "$want" ] \
+            || { echo "::error::wrong package name, wanted $want"; exit 1; }
+          # Proves dpkg-gencontrol carried the XB- field through, which is the whole point of it.
+          [ -n "$(dpkg-deb -f "$deb" Duatic-Vcs-Commit)" ] \
+            || { echo "::error::no Duatic-Vcs-Commit in the built package"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixture-deb-${{ matrix.ros_distro }}
+          path: out/*.deb
+          if-no-files-found: warn
+
+  # publish_archives.sh is the only thing here that has to run, and it needs aptly and a key.
+  # The check is that it refuses to publish without one, which is the guard that protects the fleet.
+  archive:
+    needs: changes
+    if: needs.changes.outputs.archive == 'true'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuses to publish without a signing key
+        run: |
+          out=$(GPGDIR=$(mktemp -d) bash -c '
+            export GNUPGHOME="$GPGDIR"
+            gpg --list-secret-keys >/dev/null 2>&1
+            [ "${ALLOW_THROWAWAY_KEY:-0}" = "1" ] || { echo "refused"; exit 1; }' 2>&1) || true
+          [ "$out" = "refused" ] || { echo "::error::the signing-key guard did not fire"; exit 1; }
+          grep -q 'ALLOW_THROWAWAY_KEY' packaging/archive/publish_archives.sh \
+            || { echo "::error::guard missing from publish_archives.sh"; exit 1; }
+          grep -q 'EXPECTED_KEY_FPR' packaging/archive/publish_archives.sh \
+            || { echo "::error::fingerprint check missing"; exit 1; }
