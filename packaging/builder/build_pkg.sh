@@ -111,6 +111,14 @@ else
         echo "    discarding $f (not part of this build)"
         rm -f "$f"
     done
+    # catkin_generate_changelog writes "Forthcoming"; the convention here is "Upcoming changes".
+    # The underline is rewritten with the title, or docutils warns that it is too short.
+    python3 - "$PKG_DIR/CHANGELOG.rst" <<'PYCL'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+p.write_text(p.read_text().replace(
+    'Forthcoming\n-----------\n', 'Upcoming changes\n----------------\n', 1))
+PYCL
     echo "    >>> REVIEW AND TRIM $PKG_DIR/CHANGELOG.rst BEFORE COMMITTING <<<"
 fi
 

@@ -57,7 +57,7 @@ changelog() {
       if [ -n "${2:-}" ]; then
           printf '%s\n%s\n\n* something\n\n' "$2" "$(printf '%*s' ${#2} '' | tr ' ' '-')"
       fi
-      printf 'Forthcoming\n-----------\n* work in progress\n'; } > "$WORK/$1/CHANGELOG.rst"
+      printf 'Upcoming changes\n----------------\n* work in progress\n'; } > "$WORK/$1/CHANGELOG.rst"
 }
 
 cd "$WORK"
@@ -83,7 +83,7 @@ echo "=== a bump has to be reflected in the changelog ==="
 git checkout -q main && git checkout -qb b3
 pkg pkg_a 1.2.0
 git commit -qam "release: pkg_a 1.2.0"
-check 1 "bumped, changelog still says Forthcoming" "release: pkg_a 1.2.0"
+check 1 "bumped, changelog still says Upcoming changes" "release: pkg_a 1.2.0"
 
 echo "=== and the version has to move forward ==="
 git checkout -q main && git checkout -qb b4
