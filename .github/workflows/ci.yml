@@ -21,7 +21,7 @@ jobs:
   # One git diff, reused by every job below. Cheaper than a path filter per job, and it keeps the
   # gating rules in one place.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       release: ${{ steps.filter.outputs.release }}
       builder: ${{ steps.filter.outputs.builder }}
@@ -56,13 +56,15 @@ jobs:
 
   format:
     uses: Duatic/ci-workflows/.github/workflows/pre-commit.yml@v1
+    with:
+      runner: self-hosted
 
   # Every script, every time one of them changes. Catches the unbound variable and the typo that
   # only show up on the unhappy path.
   lint:
     needs: changes
     if: needs.changes.outputs.shell == 'true'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -86,7 +88,7 @@ jobs:
   release:
     needs: changes
     if: needs.changes.outputs.release == 'true'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - name: Release check suite
@@ -97,7 +99,7 @@ jobs:
   fixtures:
     needs: changes
     if: needs.changes.outputs.tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - name: Regenerate and compare
@@ -111,7 +113,7 @@ jobs:
   builder:
     needs: changes
     if: needs.changes.outputs.builder == 'true'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -177,7 +179,7 @@ jobs:
   archive:
     needs: changes
     if: needs.changes.outputs.archive == 'true'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
