@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>duatic_fixture_product_a</name>
+  <version>0.1.0</version>
+  <description>Example product package</description>
+  <maintainer email="vpapaspyros@duatic.com">Vaios Papaspyros</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <duatic_archive_root>products/product-a</duatic_archive_root>
+  </export>
+</package>

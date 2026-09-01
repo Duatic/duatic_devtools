@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>duatic_probe</name>
+  <version>0.0.1</version>
+  <description>Disposable package for testing the packaging chain. Its only Duatic dependency is duatic_helper_msgs, and it compiles against a generated header from it, so the build fails if that dependency does not resolve through apt. Not a product, not for release.</description>
+  <maintainer email="vpapaspyros@duatic.com">Vaios Papaspyros</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>duatic_helper_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

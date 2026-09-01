@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# Copyright 2026 Duatic AG
+#
+# Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+# the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this list of conditions, and
+#    the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions, and
+#    the following disclaimer in the documentation and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or
+#    promote products derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+# TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+# Generate the fixture ROS packages the licensed archives serve. The package graph mirrors the
+# licence graph so the archive layout can be tested against the entitlement model.
+set -euo pipefail
+
+# One mapping per ROS distro: the Debian names embed the distro.
+DISTROS="${ROS_DISTROS:-jazzy kilted}"
+OS_VERSION="${OS_VERSION:-noble}"
+
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures"
+mkdir -p "$SRC"
+
+gen() {  # gen <package> <root> <description> [comma-separated ros dependencies]
+    # Separate statements: bash expands every argument to `local` before assigning any.
+    local pkg="$1" root="$2" desc="$3" deps="${4:-}"
+    local d="$SRC/$pkg"
+    local dep_xml=""
+    mkdir -p "$d"
+
+    if [ -n "$deps" ]; then
+        local x
+        # exec_depend, not depend: a metapackage does not compile against its members.
+        for x in ${deps//,/ }; do
+            dep_xml="$dep_xml
+  <exec_depend>$x</exec_depend>"
+        done
+    fi
+
+    cat > "$d/package.xml" <<XML
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>$pkg</name>
+  <version>0.1.0</version>
+  <description>$desc</description>
+  <maintainer email="vpapaspyros@duatic.com">Vaios Papaspyros</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>$dep_xml
+
+  <export>
+    <build_type>ament_cmake</build_type>
+    <duatic_archive_root>$root</duatic_archive_root>
+  </export>
+</package>
+XML
+
+    cat > "$d/CMakeLists.txt" <<CMAKE
+cmake_minimum_required(VERSION 3.22)
+project($pkg)
+
+find_package(ament_cmake REQUIRED)
+
+install(FILES marker.txt DESTINATION share/\${PROJECT_NAME})
+
+ament_package()
+CMAKE
+
+    cat > "$d/marker.txt" <<TXT
+$desc
+
+Stands in for real product content. Present so the package installs at least one file.
+TXT
+
+    cat > "$d/CHANGELOG.rst" <<RST
+$(printf '^%.0s' $(seq 1 $((${#pkg} + 22))))
+Changelog for package $pkg
+$(printf '^%.0s' $(seq 1 $((${#pkg} + 22))))
+
+0.1.0 (2026-08-24)
+------------------
+* $desc
+RST
+    echo "    $pkg${deps:+  -> $deps}"
+}
+
+echo "--- core, available to any customer"
+gen duatic_fixture_core "core" "Shared runtime every licensed customer receives"
+
+echo "--- products"
+gen duatic_fixture_product_c  "products/product-c" "Example product package"
+gen duatic_fixture_product_a "products/product-a" "Example product package"
+gen duatic_fixture_product_b "products/product-b" "Example product package"
+# A composite product, mirroring a composite entitlement. Installing it pulls from two other
+# archive roots, each authorised separately.
+gen duatic_fixture_combined     "products/combined" "Example metapackage: product_a plus product_b" \
+    "duatic_fixture_product_a,duatic_fixture_product_b"
+
+echo "--- skills"
+gen duatic_fixture_skill "skills/example" "Example skill, licensable standalone"
+
+echo "--- development"
+gen duatic_fixture_sdk "dev" "SDK headers and tools for a development seat"
+
+# Duatic packages are not in the public rosdistro index, so a dependent needs a private mapping
+# or bloom refuses to generate.
+echo
+for distro in $DISTROS; do
+    ROSDEP="$(dirname "$SRC")/rosdep/duatic-fixtures-${distro}.yaml"
+    mkdir -p "$(dirname "$ROSDEP")"
+    {
+        echo "# ROS package name -> Debian package name, for the archive fixtures."
+        echo "# Generated by make_fixtures.sh for ${distro} on ubuntu ${OS_VERSION}."
+        for d in "$SRC"/*/; do
+            name="$(basename "$d")"
+            deb="ros-${distro}-$(echo "$name" | tr '_' '-')"
+            printf '%s:\n  ubuntu:\n    %s: [%s]\n' "$name" "$OS_VERSION" "$deb"
+        done
+    } > "$ROSDEP"
+    echo "rosdep mapping: $ROSDEP"
+done
+
+echo
+echo "generated in $SRC"

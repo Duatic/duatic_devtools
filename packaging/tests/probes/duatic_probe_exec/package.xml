@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>duatic_probe_exec</name>
+  <version>0.0.1</version>
+  <description>Disposable package for testing the packaging chain. Declares duatic_helper_msgs as a runtime-only dependency and never compiles against it, which is the shape a Python node, a launch file or a runtime plugin has. Tests whether an unresolved rosdep key is treated as leniently for run dependencies as for build ones. Not a product, not for release.</description>
+  <maintainer email="vpapaspyros@duatic.com">Vaios Papaspyros</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>duatic_helper_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
