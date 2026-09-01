@@ -1,0 +1,11 @@
+# Private rosdep mapping: ROS package name -> Debian package name.
+#
+# Packages outside the public rosdistro index resolve to nothing without a file like this, and
+# bloom does not treat an unresolved key as an error. Pass one with ROSDEP_YAML.
+#
+# One file per ROS distro: the Debian names embed the distro. gen_release_set.sh generates the
+# real ones for a whole release set; this is the shape for a single package.
+
+my_package:
+  ubuntu:
+    noble: [ros-jazzy-my-package]
