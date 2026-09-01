@@ -1,0 +1,13 @@
+# Packages present in src/ that are not released, and why.
+#
+# One name per line, optionally followed by a reason. Point gen_release_set.sh at this file with
+# EXCLUDE=<path>, or copy it to exclude.txt beside the script.
+#
+# A package with no <duatic_archive_root> is reported as "unrouted" and withheld: that is the
+# oversight case. This file is the deliberate case, and covers packages in repositories you do not
+# own and therefore cannot annotate.
+#
+# <package>            <reason>
+#
+# some_upstream_pkg    the public ROS index already provides it
+# some_example_pkg     a composition of released packages, not a deliverable

@@ -48,13 +48,13 @@ packaging/workspace/build_all.sh          # build in dependency order
 packaging/archive/publish_archives.sh     # publish one signed archive root per licensable unit
 ```
 
-A per-package tag like `duatic_helper_msgs/1.0.1` builds and publishes that one package. The
+A per-package tag like `<package>/1.0.1` builds and publishes that one package. The
 orchestrator rebuilds everything in dependency order, for a new ROS distro, a new Ubuntu release or
 a toolchain change.
 
-`ROS_DISTRO_TARGET` and `OS_VERSION` select the build. The ROS distro ends up in the Debian package
-name and the Ubuntu release in the archive suite, so one archive serves every ROS distro built for
-that Ubuntu.
+`ROS_DISTRO_TARGET` and `OS_VERSION` select the build; jazzy and kilted both build today. The ROS
+distro ends up in the Debian package name and the Ubuntu release in the archive suite, so one
+archive serves every ROS distro built for that Ubuntu.
 
 ## formatting
 
