@@ -56,7 +56,23 @@ a toolchain change.
 name and the Ubuntu release in the archive suite, so one archive serves every ROS distro built for
 that Ubuntu.
 
+## formatting
+
+`.pre-commit-config.yaml` is the configuration every repository runs. Python is formatted by `black`
+at 100 columns, with `flake8` ignoring what black already decides.
+
+`pre-commit` reads a config only from the root of the repository being checked, so repositories copy
+the file in rather than reference it. Pin a tag rather than `main` to hold a repository to a known
+set of rules:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Duatic/duatic_devtools/main/.pre-commit-config.yaml \
+  -o .pre-commit-config.yaml
+```
+
+`CONTRIBUTING.md` covers installing and running it. CI runs the same hooks through.
+
 ## Planned
 
-- shared formatting configuration: `.clang-format`, `.pre-commit-config.yaml`
+- shared `.clang-format`
 - docker helper scripts
