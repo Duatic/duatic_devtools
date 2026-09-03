@@ -31,6 +31,14 @@ repos:
       - id: trailing-whitespace
       - id: check-byte-order-marker  # Forbid UTF-8 byte-order markers
 
+  # GitHub Actions workflow linting
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+        # job.workflow_ref is documented by GitHub but missing from actionlint's job context.
+        args: ['-ignore', 'property "workflow_ref" is not defined']
+
   # Python hooks
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.17.0
