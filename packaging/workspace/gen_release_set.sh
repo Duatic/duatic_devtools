@@ -49,7 +49,7 @@ if ep.is_file():
 
 # Where a package is served from is declared by the package, in package.xml:
 #
-#   <export><duatic_archive_root>products/my-product</duatic_archive_root></export>
+#   <export><duatic_archive_root>units/my-unit</duatic_archive_root></export>
 #
 # Not inferred from whether its repository is public. Those are different things: a public
 # repository can hold a licensed product. A package that declares nothing lands in "unrouted",
@@ -91,7 +91,7 @@ for n in names: by_root.setdefault(found[n], []).append(n)
 for root in sorted(by_root):
     f = lists / f"{root.replace('/', '-')}-{distro}.txt"
     # The root is declared in the file, not encoded in its name: a name cannot say which dash
-    # was a slash, and products/product-a would decode to products/product/a.
+    # was a slash, and units/unit-a would decode to units/unit/a.
     body = '\n'.join(deb(n) for n in sorted(by_root[root]))
     f.write_text(f'# root: {root}\n{body}\n')
 

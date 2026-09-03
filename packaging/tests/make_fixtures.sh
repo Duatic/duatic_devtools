@@ -22,8 +22,8 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Generate the fixture ROS packages the licensed archives serve. The package graph mirrors the
-# licence graph so the archive layout can be tested against the entitlement model.
+# Generate the fixture ROS packages. The package graph spans several archive roots, so the routing
+# and the install path can be tested against a layout with more than one root.
 set -euo pipefail
 
 # One mapping per ROS distro: the Debian names embed the distro.
@@ -97,23 +97,22 @@ RST
     echo "    $pkg${deps:+  -> $deps}"
 }
 
-echo "--- core, available to any customer"
-gen duatic_fixture_core "core" "Shared runtime every licensed customer receives"
+# A flat root that other roots draw on.
+gen duatic_fixture_shared "shared" "Example package in a flat archive root"
 
-echo "--- products"
-gen duatic_fixture_product_c  "products/product-c" "Example product package"
-gen duatic_fixture_product_a "products/product-a" "Example product package"
-gen duatic_fixture_product_b "products/product-b" "Example product package"
-# A composite product, mirroring a composite entitlement. Installing it pulls from two other
-# archive roots, each authorised separately.
-gen duatic_fixture_combined     "products/combined" "Example metapackage: product_a plus product_b" \
-    "duatic_fixture_product_a,duatic_fixture_product_b"
+echo "--- nested roots"
+gen duatic_fixture_unit_c "units/unit-c" "Example package in a nested archive root"
+gen duatic_fixture_unit_a "units/unit-a" "Example package in a nested archive root"
+gen duatic_fixture_unit_b "units/unit-b" "Example package in a nested archive root"
+# A metapackage whose members sit in two other archive roots, so installing it pulls from both.
+gen duatic_fixture_bundle "units/bundle" "Example metapackage: unit_a plus unit_b" \
+    "duatic_fixture_unit_a,duatic_fixture_unit_b"
 
-echo "--- skills"
-gen duatic_fixture_skill "skills/example" "Example skill, licensable standalone"
+echo "--- a second nesting"
+gen duatic_fixture_extra "extras/example" "Example package under a different nested root"
 
-echo "--- development"
-gen duatic_fixture_sdk "dev" "SDK headers and tools for a development seat"
+echo "--- a second flat root"
+gen duatic_fixture_tools "tools" "Example package in a second flat root"
 
 # Duatic packages are not in the public rosdistro index, so a dependent needs a private mapping
 # or bloom refuses to generate.

@@ -88,9 +88,8 @@ apt-get install -y -qq --no-install-recommends aptly gnupg jq
 # ---------------------------------------------------------------- signing key
 export GNUPGHOME="$GPGDIR"
 mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
-# Generating a key is opt-in. Robots pin this key with Signed-By, so silently making a new one
-# when the old is missing breaks apt on every robot, and the keyring cannot be shipped through the
-# archive that is broken. Fail loudly instead.
+# Generating a key is opt-in. Robots pin this key with Signed-By, so a new one breaks apt on every
+# robot, and the replacement keyring cannot ship through the archive it broke.
 if ! gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
     [ "${ALLOW_THROWAWAY_KEY:-0}" = "1" ] || {
         echo "FATAL: no signing key in $GPGDIR." >&2
@@ -114,9 +113,17 @@ fi
 KEYID="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')"
 [ -n "$KEYID" ] || { echo "FATAL: no signing key" >&2; exit 1; }
 
-# Set EXPECTED_KEY_FPR in any environment robots trust: signing with the wrong key produces an
-# archive they reject, and finding out here is cheaper than finding out per robot.
-if [ -n "${EXPECTED_KEY_FPR:-}" ] && [ "$KEYID" != "$EXPECTED_KEY_FPR" ]; then
+# Required wherever robots trust the archive: signing with the wrong key produces an archive they
+# reject, and finding out here is cheaper than finding out per robot. Only the throwaway key, which
+# nothing trusts, may publish without it.
+if [ -z "${EXPECTED_KEY_FPR:-}" ]; then
+    [ "${ALLOW_THROWAWAY_KEY:-0}" = "1" ] || {
+        echo "FATAL: EXPECTED_KEY_FPR is not set." >&2
+        echo "  Production: set it to the fingerprint robots pin." >&2
+        echo "  Local: re-run with ALLOW_THROWAWAY_KEY=1." >&2
+        exit 1
+    }
+elif [ "$KEYID" != "$EXPECTED_KEY_FPR" ]; then
     echo "FATAL: signing key is $KEYID, expected $EXPECTED_KEY_FPR" >&2
     exit 1
 fi
@@ -219,4 +226,4 @@ echo " archive roots"
 echo "=============================================================="
 find "$DIST" -name InRelease | sort | sed "s|$DIST|  |"
 echo
-echo "The private roots are what the validator authorises; public needs no identity."
+echo "The private roots are served behind the gateway; public needs no identity."

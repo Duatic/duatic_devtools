@@ -25,7 +25,7 @@
 # Assert that nothing in src/ can write to GitHub. Run before and after any release work.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SENTINEL="no-push://local-release-poc.invalid"
+SENTINEL="no-push://push-disabled.invalid"
 bad=0; n=0
 
 # The visibility column decides how a repository is cloned and, more importantly, whether the

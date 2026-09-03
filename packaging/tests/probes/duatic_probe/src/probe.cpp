@@ -5,7 +5,7 @@
 namespace duatic_probe
 {
 
-bool has_explicit_holder(const duatic_helper_msgs::srv::AttachModel::Request & request)
+bool has_explicit_holder(const duatic_helper_msgs::srv::AttachModel::Request& request)
 {
   return !request.parent_model.empty();
 }

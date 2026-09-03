@@ -1,3 +1,0 @@
-Shared runtime every licensed customer receives
-
-Stands in for real product content. Present so the package installs at least one file.

@@ -35,7 +35,7 @@
 # private ones included. Read access differs; write access is refused throughout.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SENTINEL="no-push://local-release-poc.invalid"
+SENTINEL="no-push://push-disabled.invalid"
 LIST="${LIST:-$HERE/repos.txt}"
 
 [ -f "$LIST" ] || { echo "FATAL: no $LIST. Copy repos.txt.example and edit it." >&2; exit 1; }

@@ -1,0 +1,3 @@
+Example package in a flat archive root
+
+Stands in for real product content. Present so the package installs at least one file.

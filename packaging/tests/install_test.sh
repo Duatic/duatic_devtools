@@ -40,7 +40,7 @@ echo "=============================================================="
 echo " installing $PKG from a local apt repository"
 echo "=============================================================="
 
-# A mounted source repository would make this test prove less than it appears to.
+# No mounted source repository: the package has to install from apt alone.
 if [ -d /src ]; then
     echo "WARNING: /src is mounted here, so this is not a clean machine."
 else
