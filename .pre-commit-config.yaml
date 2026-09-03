@@ -39,6 +39,14 @@ repos:
         # job.workflow_ref is documented by GitHub but missing from actionlint's job context.
         args: ['-ignore', 'property "workflow_ref" is not defined']
 
+  # C++ formatting
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.3
+    hooks:
+      - id: clang-format
+        args: ['-fallback-style=none']
+        files: \.(c|cc|cxx|cpp|frag|glsl|h|hpp|hxx|ih|ispc|ipp|java|js|m|proto|vert)$
+
   # Python hooks
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.17.0
