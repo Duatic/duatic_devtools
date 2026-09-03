@@ -15,13 +15,11 @@ rather than "not for you".
 `workspace/gen_release_set.sh` derives from what each package declares:
 
 ```
-dist/public/                    served to anyone
-dist/private/core/              shared by the licensed roots
-dist/private/products/<name>/   one root per licensable unit
-dist/private/dev/               development packages
+dist/public/            the root named "public", served to anyone
+dist/private/<root>/    every other root, one tree each
 ```
 
-A root is identified by its path, so adding one needs no configuration beyond the package
+A root is whatever a package declares, so adding one needs no configuration beyond the package
 declaring it.
 
 ## Run order
@@ -49,8 +47,8 @@ be shipped through the archive that is broken.
 
 `publish_archives.sh` therefore refuses to run when no key is present. `ALLOW_THROWAWAY_KEY=1`
 opts into generating one, which is right for local work and wrong everywhere else. Set
-`EXPECTED_KEY_FPR` in any environment whose clients trust the archive, and publishing fails if the
-key is not the one they pinned.
+`EXPECTED_KEY_FPR` is required unless that opt-in is set, and publishing fails if the key is not the
+one clients pinned.
 
 `make_archive_key.sh` creates a real one. Run it once, on a machine that is not the publish host:
 

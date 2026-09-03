@@ -130,13 +130,13 @@ jobs:
             -v "$PWD/packaging/tests/rosdep:/rosdep" \
             -v "$PWD/out:/out" \
             "ros:${ROS_DISTRO_TARGET}-ros-base" \
-            /builder/build_pkg.sh duatic_fixture_core < /dev/null
+            /builder/build_pkg.sh duatic_fixture_shared < /dev/null
 
       - name: The .deb exists and declares what it should
         env:
           ROS_DISTRO_TARGET: ${{ matrix.ros_distro }}
         run: |
-          want="ros-${ROS_DISTRO_TARGET}-duatic-fixture-core"
+          want="ros-${ROS_DISTRO_TARGET}-duatic-fixture-shared"
           debs=( "out/${want}_"*.deb )
           deb="${debs[0]}"
           [ -e "$deb" ] || { echo "::error::no .deb produced for $ROS_DISTRO_TARGET"; exit 1; }

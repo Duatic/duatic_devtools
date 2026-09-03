@@ -97,22 +97,22 @@ RST
     echo "    $pkg${deps:+  -> $deps}"
 }
 
-echo "--- core, available to any customer"
-gen duatic_fixture_core "core" "Example shared runtime package"
+# A flat root that other roots draw on.
+gen duatic_fixture_shared "shared" "Example package in a flat archive root"
 
-echo "--- products"
-gen duatic_fixture_product_c  "products/product-c" "Example product package"
-gen duatic_fixture_product_a "products/product-a" "Example product package"
-gen duatic_fixture_product_b "products/product-b" "Example product package"
+echo "--- nested roots"
+gen duatic_fixture_unit_c "units/unit-c" "Example package in a nested archive root"
+gen duatic_fixture_unit_a "units/unit-a" "Example package in a nested archive root"
+gen duatic_fixture_unit_b "units/unit-b" "Example package in a nested archive root"
 # A metapackage whose members sit in two other archive roots, so installing it pulls from both.
-gen duatic_fixture_combined     "products/combined" "Example metapackage: product_a plus product_b" \
-    "duatic_fixture_product_a,duatic_fixture_product_b"
+gen duatic_fixture_bundle "units/bundle" "Example metapackage: unit_a plus unit_b" \
+    "duatic_fixture_unit_a,duatic_fixture_unit_b"
 
-echo "--- skills"
-gen duatic_fixture_skill "skills/example" "Example skill package, served from its own root"
+echo "--- a second nesting"
+gen duatic_fixture_extra "extras/example" "Example package under a different nested root"
 
-echo "--- development"
-gen duatic_fixture_sdk "dev" "Example SDK headers and tools"
+echo "--- a second flat root"
+gen duatic_fixture_tools "tools" "Example package in a second flat root"
 
 # Duatic packages are not in the public rosdistro index, so a dependent needs a private mapping
 # or bloom refuses to generate.

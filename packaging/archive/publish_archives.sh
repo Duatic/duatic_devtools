@@ -113,9 +113,17 @@ fi
 KEYID="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')"
 [ -n "$KEYID" ] || { echo "FATAL: no signing key" >&2; exit 1; }
 
-# Set EXPECTED_KEY_FPR in any environment robots trust: signing with the wrong key produces an
-# archive they reject, and finding out here is cheaper than finding out per robot.
-if [ -n "${EXPECTED_KEY_FPR:-}" ] && [ "$KEYID" != "$EXPECTED_KEY_FPR" ]; then
+# Required wherever robots trust the archive: signing with the wrong key produces an archive they
+# reject, and finding out here is cheaper than finding out per robot. Only the throwaway key, which
+# nothing trusts, may publish without it.
+if [ -z "${EXPECTED_KEY_FPR:-}" ]; then
+    [ "${ALLOW_THROWAWAY_KEY:-0}" = "1" ] || {
+        echo "FATAL: EXPECTED_KEY_FPR is not set." >&2
+        echo "  Production: set it to the fingerprint robots pin." >&2
+        echo "  Local: re-run with ALLOW_THROWAWAY_KEY=1." >&2
+        exit 1
+    }
+elif [ "$KEYID" != "$EXPECTED_KEY_FPR" ]; then
     echo "FATAL: signing key is $KEYID, expected $EXPECTED_KEY_FPR" >&2
     exit 1
 fi

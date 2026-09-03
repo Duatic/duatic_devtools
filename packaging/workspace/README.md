@@ -46,7 +46,7 @@ Declared by the package, in its own `package.xml`:
 
 ```xml
 <export>
-  <duatic_archive_root>products/my-product</duatic_archive_root>
+  <duatic_archive_root>units/my-unit</duatic_archive_root>
 </export>
 ```
 

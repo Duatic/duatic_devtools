@@ -14,13 +14,14 @@ install_from_archive.sh   install from the signed archives, keyring and Signed-B
 
 ## The fixtures
 
-`make_fixtures.sh` writes `fixtures/`. The names are deliberately generic: `product_a`, `product_b`,
-`product_c`, a `combined` metapackage, a `skill`, an `sdk` and a shared `core`.
+`make_fixtures.sh` writes `fixtures/`. The names describe the shape each one tests: two flat roots
+(`shared`, `tools`), three packages under one nested root (`units/unit-a`, `-b`, `-c`), a `bundle`
+metapackage, and one package under a second nesting (`extras/example`).
 
-What matters is the shape, not the names. `duatic_fixture_combined` depends on
-`duatic_fixture_product_a` and `duatic_fixture_product_b`, which live in different archive roots, so
-installing the combined package has to pull from both. A metapackage that spans roots is the case
-that breaks if the routing is wrong, and that is the only reason the dependency exists.
+What matters is the shape, not the names. `duatic_fixture_bundle` depends on `duatic_fixture_unit_a`
+and `duatic_fixture_unit_b`, which live in different archive roots, so installing the bundle has to
+pull from both. A metapackage that spans roots is the case that breaks if the routing is wrong, and
+that is the only reason the dependency exists.
 
 Regenerate them after changing the generator:
 
