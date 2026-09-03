@@ -41,7 +41,7 @@ jobs:
           else
               changed=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
           fi
-          echo "$changed" | sed 's/^/  /'
+          echo "$changed" | awk '{ print "  " $0 }'
 
           has() { echo "$changed" | grep -qE "$1"; }
           {
@@ -75,7 +75,7 @@ jobs:
       # Advisory, not gating.
       - name: Shellcheck
         continue-on-error: true
-        run: shellcheck --severity=warning $(git ls-files '*.sh')
+        run: git ls-files -z '*.sh' | xargs -0 shellcheck --severity=warning
 
   # The fixtures are generated and committed, so the generator and the tree have to agree.
   fixtures:
@@ -137,8 +137,9 @@ jobs:
           ROS_DISTRO_TARGET: ${{ matrix.ros_distro }}
         run: |
           want="ros-${ROS_DISTRO_TARGET}-duatic-fixture-core"
-          deb=$(ls "out/${want}_"*.deb 2>/dev/null | head -1)
-          [ -n "$deb" ] || { echo "::error::no .deb produced for $ROS_DISTRO_TARGET"; exit 1; }
+          debs=( "out/${want}_"*.deb )
+          deb="${debs[0]}"
+          [ -e "$deb" ] || { echo "::error::no .deb produced for $ROS_DISTRO_TARGET"; exit 1; }
           echo "built $deb"
           dpkg-deb -f "$deb" Package Version Architecture Maintainer Duatic-Vcs-Commit
           [ "$(dpkg-deb -f "$deb" Package)" = "$want" ] \
