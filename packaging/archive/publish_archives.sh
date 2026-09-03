@@ -88,9 +88,8 @@ apt-get install -y -qq --no-install-recommends aptly gnupg jq
 # ---------------------------------------------------------------- signing key
 export GNUPGHOME="$GPGDIR"
 mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
-# Generating a key is opt-in. Robots pin this key with Signed-By, so silently making a new one
-# when the old is missing breaks apt on every robot, and the keyring cannot be shipped through the
-# archive that is broken. Fail loudly instead.
+# Generating a key is opt-in. Robots pin this key with Signed-By, so a new one breaks apt on every
+# robot, and the replacement keyring cannot ship through the archive it broke.
 if ! gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec'; then
     [ "${ALLOW_THROWAWAY_KEY:-0}" = "1" ] || {
         echo "FATAL: no signing key in $GPGDIR." >&2

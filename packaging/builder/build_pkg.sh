@@ -134,9 +134,8 @@ echo "--- bloom-generate rosdebian"
 bloom-generate rosdebian \
     --os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
 
-# Where this package came from. A version says which release it is; only the commit says what it
-# was built from. dpkg-gencontrol copies XB- fields into the binary package with the prefix
-# stripped, so a robot can answer this with `dpkg -s`.
+# The commit this package was built from. dpkg-gencontrol copies XB- fields into the binary
+# package with the prefix stripped, so a robot answers this with `dpkg -s`.
 GIT_COMMIT="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
 if [ "$GIT_COMMIT" != "unknown" ] && ! git -C "$SRC" diff --quiet HEAD 2>/dev/null; then
     GIT_COMMIT="$GIT_COMMIT-dirty"
@@ -221,8 +220,8 @@ if ! ls "$OUT"/*-dbgsym_* >/dev/null 2>&1; then
     echo "         the fact without rebuilding it, so this is worth resolving now."
 fi
 
-# Only what this run produced. `awk NR<=30` rather than `head`: head closes the pipe, and the
-# resulting SIGPIPE under `set -o pipefail` fails the build after the .deb was written.
+# Only what this run produced. awk rather than head: head closes the pipe, and SIGPIPE under
+# pipefail fails the build.
 shopt -s nullglob
 DEB_NAME="ros-${ROS_DISTRO_ARG}-${PKG//_/-}"
 for d in "$OUT/$DEB_NAME"_*.deb "$OUT/$DEB_NAME"-dbgsym_*.ddeb; do

@@ -15,10 +15,10 @@ committed, tagged or pushed from it.
 
 Four guards, applied by `clone_all.sh` and checked by `verify_isolation.sh`:
 
-1. Cloned over genuinely anonymous HTTPS. **This machine rewrites `https://github.com/` to SSH via
-   `url.insteadOf`**, so every git call here runs with `GIT_CONFIG_GLOBAL=/dev/null
-   GIT_CONFIG_SYSTEM=/dev/null`. Without that, an "anonymous" clone is authenticated as you, which
-   is how eleven private repositories were once mistaken for public.
+1. Cloned over genuinely anonymous HTTPS. A `url.insteadOf` rewrite of `https://github.com/` to
+   SSH makes an "anonymous" clone authenticate as you, so every git call here runs with
+   `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null`. Without it a private repository
+   clones successfully and is taken for public.
 2. `origin` must remain an `https://` URL. An SSH origin carries push capability through the agent
    whatever else is set.
 3. `remote.origin.pushurl` is an unroutable sentinel, so a push fails loudly.
@@ -102,8 +102,6 @@ on the same URL:
 Which state a root is in is the gateway's decision, not the packaging tooling's, and changing it
 moves no packages. That is the reason for one root per licensable unit: the URL a robot has in its
 `sources.list` is stable for the life of the product, through every change of who may fetch it.
-
-Separate roots also mean a partner given one product cannot enumerate the rest of the line.
 
 ## Opening a root moves no files
 

@@ -112,6 +112,5 @@ done
 echo
 echo "  $built built, $failed failed"
 [ -n "$failures" ] && echo "  failures:$failures"
-# Non-zero when anything failed: this is called from CI, where a silent success is worse than a
-# noisy failure.
+# Non-zero when anything failed, so CI does not pass on a partial build.
 [ "$failed" -eq 0 ]

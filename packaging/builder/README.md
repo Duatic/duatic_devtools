@@ -73,8 +73,7 @@ works. The signing key is a throwaway generated on first run.
 
 ## Checking it worked
 
-The install checks live in `../tests/`: from the local repository, from the signed archives, and
-over HTTPS with and without a client certificate. See `../tests/README.md`.
+The install checks live in `../tests/`: from the local repository, and from the signed archives.
+See `../tests/README.md`.
 
-Serving over HTTPS is `../archive/`, which runs Caddy in a container. Nothing here configures a web
-server on the host.
+Serving the archives is out of scope here and in `../archive/`. Both stop at producing the tree.
