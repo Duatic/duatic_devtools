@@ -3,7 +3,7 @@
 <package format="3">
   <name>duatic_fixture_core</name>
   <version>0.1.0</version>
-  <description>Shared runtime every licensed customer receives</description>
+  <description>Example shared runtime package</description>
   <maintainer email="vpapaspyros@duatic.com">Vaios Papaspyros</maintainer>
   <license>BSD-3-Clause</license>
 

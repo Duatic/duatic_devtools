@@ -3,7 +3,7 @@
 <package format="3">
   <name>duatic_fixture_sdk</name>
   <version>0.1.0</version>
-  <description>SDK headers and tools for a development seat</description>
+  <description>Example SDK headers and tools</description>
   <maintainer email="vpapaspyros@duatic.com">Vaios Papaspyros</maintainer>
   <license>BSD-3-Clause</license>
 

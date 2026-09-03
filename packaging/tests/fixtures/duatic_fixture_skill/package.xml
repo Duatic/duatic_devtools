@@ -3,7 +3,7 @@
 <package format="3">
   <name>duatic_fixture_skill</name>
   <version>0.1.0</version>
-  <description>Example skill, licensable standalone</description>
+  <description>Example skill package, served from its own root</description>
   <maintainer email="vpapaspyros@duatic.com">Vaios Papaspyros</maintainer>
   <license>BSD-3-Clause</license>
 

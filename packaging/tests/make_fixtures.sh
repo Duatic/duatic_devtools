@@ -22,8 +22,8 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Generate the fixture ROS packages the licensed archives serve. The package graph mirrors the
-# licence graph so the archive layout can be tested against the entitlement model.
+# Generate the fixture ROS packages. The package graph spans several archive roots, so the routing
+# and the install path can be tested against a layout with more than one root.
 set -euo pipefail
 
 # One mapping per ROS distro: the Debian names embed the distro.
@@ -98,22 +98,21 @@ RST
 }
 
 echo "--- core, available to any customer"
-gen duatic_fixture_core "core" "Shared runtime every licensed customer receives"
+gen duatic_fixture_core "core" "Example shared runtime package"
 
 echo "--- products"
 gen duatic_fixture_product_c  "products/product-c" "Example product package"
 gen duatic_fixture_product_a "products/product-a" "Example product package"
 gen duatic_fixture_product_b "products/product-b" "Example product package"
-# A composite product, mirroring a composite entitlement. Installing it pulls from two other
-# archive roots, each authorised separately.
+# A metapackage whose members sit in two other archive roots, so installing it pulls from both.
 gen duatic_fixture_combined     "products/combined" "Example metapackage: product_a plus product_b" \
     "duatic_fixture_product_a,duatic_fixture_product_b"
 
 echo "--- skills"
-gen duatic_fixture_skill "skills/example" "Example skill, licensable standalone"
+gen duatic_fixture_skill "skills/example" "Example skill package, served from its own root"
 
 echo "--- development"
-gen duatic_fixture_sdk "dev" "SDK headers and tools for a development seat"
+gen duatic_fixture_sdk "dev" "Example SDK headers and tools"
 
 # Duatic packages are not in the public rosdistro index, so a dependent needs a private mapping
 # or bloom refuses to generate.

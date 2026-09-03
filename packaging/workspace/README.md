@@ -90,25 +90,17 @@ could not verify rather than passing silently. `NETWORK=0` skips it.
 
 ## A product keeps its path for life
 
-Every product has its own archive root, permanently, whether or not it is licensed. Three states
-on the same URL:
-
-| State | Who may fetch |
-|---|---|
-| **Gated** | organizations holding the licence for it |
-| **Early access** | named partners only |
-| **Public** | anyone |
-
-Which state a root is in is the gateway's decision, not the packaging tooling's, and changing it
-moves no packages. That is the reason for one root per licensable unit: the URL a robot has in its
-`sources.list` is stable for the life of the product, through every change of who may fetch it.
+Every product has its own archive root, permanently, whether or not it is licensed. Who may fetch a
+root is the gateway's decision, not the packaging tooling's, and changing it moves no packages. That
+is the reason for one root per licensable unit: the URL a robot has in its `sources.list` is stable
+for the life of the product, through every change of who may fetch it.
 
 ## Opening a root moves no files
 
 Because the path is permanent, making a gated root public copies nothing: no second build claims
-the same version, and no client's `sources.list` changes. That last point matters wherever an agent
-reconciles sources from entitlements, since a package that *moved* would have its source removed on
-the next reconcile.
+the same version, and no client's `sources.list` changes. That last point matters wherever sources
+are reconciled automatically, since a package that *moved* would have its source removed on the
+next reconcile.
 
 To serve something from a second archive as well, copy the artifact rather than rebuilding it.
 `aptly repo copy` moves the pool reference so the bytes are identical, and aptly refuses a rebuild

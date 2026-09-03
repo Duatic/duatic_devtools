@@ -218,4 +218,4 @@ echo " archive roots"
 echo "=============================================================="
 find "$DIST" -name InRelease | sort | sed "s|$DIST|  |"
 echo
-echo "The private roots are what the validator authorises; public needs no identity."
+echo "The private roots are served behind the gateway; public needs no identity."

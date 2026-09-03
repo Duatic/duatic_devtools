@@ -2,8 +2,8 @@
 
 One signed apt archive root per licensable unit, plus the key that signs them.
 
-Serving them, and deciding who may fetch from which root, is not here. That is a gateway and an
-authorisation service, and this tooling stops at producing the tree.
+Serving them, and deciding who may fetch from which root, is not here. This tooling stops at
+producing the tree.
 
 ## Layout
 
@@ -16,13 +16,13 @@ rather than "not for you".
 
 ```
 dist/public/                    served to anyone
-dist/private/core/              any entitlement at all
+dist/private/core/              shared by the licensed roots
 dist/private/products/<name>/   one root per licensable unit
-dist/private/dev/               development seats
+dist/private/dev/               development packages
 ```
 
-The path is the entitlement, so a gateway can derive who may fetch a root from the path itself
-rather than from a table, and adding a root needs no gateway configuration.
+A root is identified by its path, so adding one needs no configuration beyond the package
+declaring it.
 
 ## Run order
 
