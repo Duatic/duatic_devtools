@@ -1,0 +1,21 @@
+name: Release
+# Cut a semver release: tags vX.Y.Z, moves the floating vX tag to the same commit and publishes a
+# GitHub Release with generated notes. The logic lives in ci-workflows. Dispatch from main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Which part of the version to increment'
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: Duatic/ci-workflows/.github/workflows/release.yml@v1
+    with:
+      bump: ${{ inputs.bump }}
