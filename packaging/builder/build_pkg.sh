@@ -39,11 +39,10 @@ ROS_DISTRO_ARG="${ROS_DISTRO:-jazzy}"
 # Each LTS ROS 2 distro has one Tier 1 Ubuntu release for its whole support life (REP 2000).
 # Rolling has no such commitment: it tracks whatever Ubuntu ROS's own tooling currently targets,
 # so this entry is a snapshot that we have to revalidate.
-# TODO: recheck when Rolling moves past noble
 case "$ROS_DISTRO_ARG" in
     jazzy | kilted) os_version_default=noble ;;
     lyrical) os_version_default=resolute ;;
-    rolling) os_version_default=noble ;; # snapshot: recheck when Rolling moves past noble
+    rolling) os_version_default=resolute ;;
     *) os_version_default="" ;;
 esac
 OS_VERSION="${OS_VERSION:-$os_version_default}"
