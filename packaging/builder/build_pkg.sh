@@ -36,7 +36,20 @@ SRC=/src            # the repository, mounted read-write
 OUT=/out            # where .debs are copied out to
 BUILD=/tmp/build
 ROS_DISTRO_ARG="${ROS_DISTRO:-jazzy}"
-OS_VERSION="${OS_VERSION:-noble}"
+# Each LTS ROS 2 distro has one Tier 1 Ubuntu release for its whole support life (REP 2000).
+# Rolling has no such commitment: it tracks whatever Ubuntu ROS's own tooling currently targets,
+# so this entry is a snapshot that we have to revalidate.
+case "$ROS_DISTRO_ARG" in
+    jazzy | kilted) os_version_default=noble ;;
+    lyrical) os_version_default=resolute ;;
+    rolling) os_version_default=resolute ;;
+    *) os_version_default="" ;;
+esac
+OS_VERSION="${OS_VERSION:-$os_version_default}"
+if [ -z "$OS_VERSION" ]; then
+    echo "no known Ubuntu base for ROS_DISTRO=$ROS_DISTRO_ARG; set OS_VERSION explicitly" >&2
+    exit 1
+fi
 
 # Runs as root against a bind mount, so writes are root-owned on the host. See hand_back_ownership.
 HOST_UID="${HOST_UID:-0}"
@@ -58,8 +71,8 @@ echo "=============================================================="
 echo "--- installing packaging tooling"
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
-    python3-bloom python3-catkin-pkg \
-    fakeroot dpkg-dev debhelper devscripts equivs apt-utils
+python3-bloom python3-catkin-pkg \
+fakeroot dpkg-dev debhelper devscripts equivs apt-utils
 
 for c in bloom-generate catkin_generate_changelog fakeroot dpkg-buildpackage mk-build-deps apt-ftparchive; do
     command -v "$c" >/dev/null || { echo "FATAL: missing $c" >&2; exit 1; }
@@ -132,7 +145,7 @@ cd "$BUILD/$PKG"
 echo "--- bloom-generate rosdebian"
 # bloom-generate, not bloom-release: bloom-release targets the public rosdistro.
 bloom-generate rosdebian \
-    --os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
+--os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
 
 # The commit this package was built from. dpkg-gencontrol copies XB- fields into the binary
 # package with the prefix stripped, so a robot answers this with `dpkg -s`.
