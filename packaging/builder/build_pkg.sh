@@ -31,6 +31,8 @@
 
 set -euo pipefail
 
+export DEBIAN_FRONTEND=noninteractive
+
 PKG="${1:?usage: build_pkg.sh <package_name>}"
 SRC=/src            # the repository, mounted read-write
 OUT=/out            # where .debs are copied out to
