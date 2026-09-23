@@ -162,7 +162,9 @@ publish_or_switch() {
     local endpoint="$1" dist="$2" snap="$3"
     local line existing
     line="$(apt_ly publish list 2>/dev/null | grep -F "filesystem:${endpoint}:./${dist} " || true)"
-    existing="$(printf '%s' "$line" | sed -nE 's/.*\[([^]]*)\].*/\1/p' | norm_archs)"
+    # The first bracket group is the architecture list. A greedy match takes the last one instead,
+    # which is the source repo name.
+    existing="$(printf '%s' "$line" | sed -nE 's/^[^[]*\[([^]]*)\].*/\1/p' | norm_archs)"
 
     # publish switch keeps the publication's architecture list, so a new architecture yields a
     # tree with no index for it. Drop and republish when the set changes.
