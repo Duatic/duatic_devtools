@@ -39,6 +39,28 @@ docker run --rm -it \
 
 The result is `dist/`, a tree of signed archive roots. Point a gateway at it to serve them.
 
+## Letting something else publish
+
+`add_and_publish.sh` is the entry point a pipeline calls: it routes delivered packages into their
+roots, publishes, and reads the index back. It refuses a root that disagrees with the
+`<duatic_archive_root>` the package declares, which `build_pkg.sh` carries into the binary, so a
+caller cannot route a licensed package into the open archive by asking.
+
+That check binds a package to its root. It does not bind a *caller* to a root, and on a host with
+one key every caller can reach every root. `publish-gate` is the forced command that does:
+
+```
+command="/usr/local/bin/publish-gate products/example",restrict ssh-ed25519 AAAA... example
+```
+
+The permitted roots come from that line rather than from the request, because `authorized_keys` is
+the one place the caller cannot edit. A key pinned to one root cannot reach another, cannot reach
+the open archive, and cannot run anything else on the host.
+
+This is host state. It is not in this repository and is not reviewed when this repository is,
+which is the point: what is being constrained must not be able to edit the constraint. It also
+means a rebuilt host without it fails open, so whatever restores that host has to restore this.
+
 ## The signing key
 
 Every client pins this key with `Signed-By`, so it is the single thing they all trust. Losing it is

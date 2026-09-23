@@ -227,7 +227,7 @@ for entry in "${ARCHIVES[@]}"; do
     else
         apt_ly publish snapshot "${SIGN_ARGS[@]}" -architectures="$archs" \
             -distribution="$SUITE" -component=main "$snap" "filesystem:${ep}:" >/dev/null
-        echo "    published noble-nightly -> $snap [$archs]"
+        echo "    published $SUITE -> $snap [$archs]"
     fi
 done
 

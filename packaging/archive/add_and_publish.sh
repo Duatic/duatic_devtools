@@ -57,6 +57,23 @@ for spec in "$@"; do
     done
     ls "out/${pkg}"_*.deb >/dev/null 2>&1 \
         || { echo "FATAL: no ${pkg}_*.deb in $ARCHIVE/out" >&2; exit 1; }
+    # The root the package itself declares, not the one the caller asked for. Routing decides who
+    # may fetch a package, so a caller that could name any root could publish a licensed one into
+    # the open archive.
+    for deb in "out/${pkg}"_*.deb; do
+        declared="$(dpkg-deb -f "$deb" Duatic-Archive-Root 2>/dev/null || true)"
+        if [ -z "$declared" ]; then
+            [ "${ALLOW_UNDECLARED_ROOT:-0}" = "1" ] || {
+                echo "FATAL: $(basename "$deb") declares no archive root." >&2
+                echo "  Add <export><duatic_archive_root> to its package.xml and rebuild." >&2
+                echo "  Set ALLOW_UNDECLARED_ROOT=1 to route it by hand anyway." >&2
+                exit 1
+            }
+        elif [ "$declared" != "$root" ]; then
+            echo "FATAL: $(basename "$deb") declares root '$declared', asked to publish to '$root'" >&2
+            exit 1
+        fi
+    done
     # Named as gen_release_set.sh names it, so that generator still owns the file and still
     # prunes it. A list outside its <root>-<distro>.txt scheme is never cleaned up, and a
     # package that moves to a different root stays published under the old one.
