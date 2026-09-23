@@ -9,7 +9,6 @@ build_fixtures.sh         build every fixture into a .deb, using builder/build_p
 fixtures/                 seven minimal packages, generated
 probes/                   two hand-written packages that test dependency resolution
 install_test.sh           install from the local flat repository
-install_from_archive.sh   install from the signed archives, keyring and Signed-By
 ```
 
 ## The fixtures
@@ -57,6 +56,6 @@ docker run --rm -it \
   /tests/install_test.sh [package]
 ```
 
-`install_from_archive.sh` takes `public` to assert the private package is *not* installable.
-
-Checks that exercise a gateway, rather than the archive tree itself, live with the gateway.
+Checks that exercise a gateway, rather than the archive tree itself, live with the gateway. That
+includes asserting a licensed package is not installable without an entitlement, which needs the
+validator to answer and so cannot be decided from the tree alone.

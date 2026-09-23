@@ -23,7 +23,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Turn the built packages into a local flat apt repository: a directory with a Packages index.
-# Runs on the host. Signing and channels are publish.sh's job.
+# Runs on the host. Signing and channels are the archive tooling's job.
 #
 # Usage:  ./make_repo.sh
 
