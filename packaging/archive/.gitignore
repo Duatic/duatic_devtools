@@ -1,7 +1,8 @@
 # Signing key material. archive-key/ is where make_archive_key.sh writes by default, and holds a
-# private key.
+# private key. .passphrase is what GPG_PASSPHRASE_FILE points at, and opens that key.
 gnupg/
 archive-key/
+.passphrase
 
 # Generated: the package lists, the rosdep mapping, and the published tree.
 lists/
