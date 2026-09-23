@@ -59,21 +59,11 @@ number of package files and the number of indexed packages disagree.
 
 ## Publish signed archives
 
-```bash
-docker run --rm -it \
-  -v "$PWD:/builder" \
-  -v "$PWD/out:/out" \
-  -v "$PWD/dist:/dist" \
-  ros:jazzy-ros-base \
-  /builder/publish.sh [stamp]
-```
-
-Re-running with an existing stamp switches the channel to that snapshot, which is how promotion
-works. The signing key is a throwaway generated on first run.
+Publishing lives in `../archive/`, which produces one signed root per licensable unit. See
+`../archive/README.md`.
 
 ## Checking it worked
 
-The install checks live in `../tests/`: from the local repository, and from the signed archives.
-See `../tests/README.md`.
+The install check from the local repository lives in `../tests/`. See `../tests/README.md`.
 
 Serving the archives is out of scope here and in `../archive/`. Both stop at producing the tree.

@@ -158,8 +158,15 @@ fi
 GIT_URL="$(git -C "$SRC" config --get remote.origin.url 2>/dev/null || echo unknown)"
 echo "--- source $GIT_COMMIT"
 python3 - "$GIT_COMMIT" "$GIT_URL" <<'PYCTL'
-import sys, pathlib
+import sys, pathlib, xml.etree.ElementTree as ET
 commit, url = sys.argv[1], sys.argv[2]
+# The root the package declares, carried into the binary so the publish host can check where it
+# is being routed instead of trusting whoever asked. gen_release_set.sh reads the same field.
+root = ''
+try:
+    root = (ET.parse('package.xml').getroot().findtext('export/duatic_archive_root') or '').strip()
+except (OSError, ET.ParseError):
+    pass
 p = pathlib.Path('debian/control')
 stanzas = p.read_text().split('\n\n')
 out = []
@@ -173,6 +180,8 @@ for st in stanzas:
         add = [f'XB-Duatic-Vcs-Commit: {commit}']
         if url != 'unknown':
             add.append(f'XB-Duatic-Vcs-Url: {url}')
+        if root:
+            add.append(f'XB-Duatic-Archive-Root: {root}')
         # Before Description, which continues over following indented lines and has to stay last.
         at = next((i for i, l in enumerate(lines) if l.startswith('Description:')), len(lines))
         lines[at:at] = add
