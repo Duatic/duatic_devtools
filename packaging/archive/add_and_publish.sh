@@ -91,8 +91,16 @@ if [ -n "${GPG_PASSPHRASE_FILE:-}" ]; then
 elif [ -f "$ARCHIVE/.passphrase" ]; then
     pass_args=(-e "GPG_PASSPHRASE_FILE=/work/.passphrase")
 fi
+# Rootless docker already maps the container's root onto the invoking user, so the files come back
+# owned correctly and publish_archives.sh skips its hand-back when these are unset. Setting them
+# there would chown into the subordinate range instead, which takes the tree away rather than
+# returning it, and does so quietly.
+uid_args=()
+if ! docker info -f '{{.SecurityOptions}}' 2>/dev/null | grep -q rootless; then
+    uid_args=(-e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)")
+fi
 docker run --rm \
-    -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+    "${uid_args[@]}" \
     -e "EXPECTED_KEY_FPR=${EXPECTED_KEY_FPR:-}" \
     -e "ALLOW_THROWAWAY_KEY=${ALLOW_THROWAWAY_KEY:-0}" \
     -e "OS_VERSION=$OS_VERSION" -e "CHANNEL=$CHANNEL" \
