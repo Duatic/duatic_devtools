@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Copyright 2026 Duatic AG
+#
+# Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+# the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this list of conditions, and
+#    the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions, and
+#    the following disclaimer in the documentation and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or
+#    promote products derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+# TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+# The only thing a publishing key may run. Named as a forced command in authorized_keys, with the
+# roots that key is allowed to publish into:
+#
+#   command="/usr/local/bin/publish-gate products/acme",restrict ssh-ed25519 AAAA... acme
+#
+# The roots come from this line, not from the caller, because authorized_keys is the one place the
+# caller cannot edit. A key pinned to one root cannot reach another or the open archive, whatever
+# it asks for.
+#
+# The client sends "<package>:<root>:<version> ..." as it would to add_and_publish.sh, and every
+# root in it must be one this key was pinned to.
+
+set -euo pipefail
+
+ALLOWED=("$@")
+[ ${#ALLOWED[@]} -gt 0 ] || { echo "FATAL: publish-gate was given no permitted roots" >&2; exit 1; }
+
+REQUEST="${SSH_ORIGINAL_COMMAND:-}"
+[ -n "$REQUEST" ] || { echo "FATAL: no specs given" >&2; exit 1; }
+
+# Delivery arrives over the sftp subsystem, which is how scp transfers since OpenSSH 9, and a
+# forced command replaces that too.
+#
+# Started in the home directory because a caller names the target as a path under it. Confining
+# the transfer wants ChrootDirectory, which sshd takes from its own config rather than from an
+# authorized_keys entry; the bound here is an account that owns nothing but the archive.
+case "$REQUEST" in
+    */sftp-server|internal-sftp)
+        for server in /usr/lib/openssh/sftp-server /usr/libexec/openssh/sftp-server \
+                      /usr/lib/ssh/sftp-server; do
+            [ -x "$server" ] && exec "$server"
+        done
+        echo "FATAL: the sftp subsystem was asked for and no sftp-server is installed" >&2
+        exit 1 ;;
+esac
+
+# The specs the request names, and nothing else it says: a caller sends the command line it would
+# run against a host with no gate. None of it is executed, so a caller cannot choose the key that
+# signs, the distro whose list it joins, or the archive it lands in.
+read -r -a WORDS <<< "$REQUEST"
+SPECS=()
+for w in "${WORDS[@]}"; do
+    # The request arrives as the client wrote it, so a quoted argument still carries its quotes.
+    w="${w%\'}"; w="${w#\'}"
+    w="${w%\"}"; w="${w#\"}"
+    case "$w" in *:*:*) ;; *) continue ;; esac
+    printf '%s' "$w" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/+~:-]*$' || continue
+    SPECS+=("$w")
+done
+[ ${#SPECS[@]} -gt 0 ] || {
+    echo "FATAL: the request names no <package>:<root>:<version>" >&2
+    exit 1
+}
+for spec in "${SPECS[@]}"; do
+    case "$spec" in *:*:*) ;; *) echo "FATAL: malformed spec '$spec'" >&2; exit 1 ;; esac
+    rest="${spec#*:}"; root="${rest%%:*}"
+    ok=0
+    for permitted in "${ALLOWED[@]}"; do
+        [ "$root" = "$permitted" ] && { ok=1; break; }
+    done
+    [ "$ok" = 1 ] || {
+        echo "FATAL: this key may not publish into '$root'" >&2
+        echo "  permitted: ${ALLOWED[*]}" >&2
+        exit 1
+    }
+done
+
+exec "$(dirname "$(readlink -f "$0")")/add_and_publish.sh" "${SPECS[@]}"

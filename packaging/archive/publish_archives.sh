@@ -127,6 +127,15 @@ elif [ "$KEYID" != "$EXPECTED_KEY_FPR" ]; then
     echo "FATAL: signing key is $KEYID, expected $EXPECTED_KEY_FPR" >&2
     exit 1
 fi
+# A key from make_archive_key.sh has a passphrase, and gpg under -batch cannot prompt for one.
+# A file rather than an argument, so it is not visible in ps.
+SIGN_ARGS=(-gpg-key="$KEYID" -batch)
+if [ -n "${GPG_PASSPHRASE_FILE:-}" ]; then
+    [ -r "$GPG_PASSPHRASE_FILE" ] \
+        || { echo "FATAL: GPG_PASSPHRASE_FILE=$GPG_PASSPHRASE_FILE is not readable" >&2; exit 1; }
+    SIGN_ARGS+=(-passphrase-file="$GPG_PASSPHRASE_FILE")
+fi
+
 mkdir -p "$DIST"
 # Written via a temporary: the redirect truncates before gpg runs, and this path must stay
 # fetchable at all times.
@@ -197,11 +206,13 @@ for entry in "${ARCHIVES[@]}"; do
         # Snapshots are immutable, so reusing a stamp republishes the earlier contents.
         echo "    reusing existing snapshot $snap (promotion, not a new build)"
     else
-        apt_ly snapshot create "$snap" from repo "$ep" >/dev/null
+        apt_ly snapshot create "$snap" from repo "$repo" >/dev/null
     fi
 
     line="$(apt_ly publish list 2>/dev/null | grep -F "filesystem:${ep}:./${SUITE} " || true)"
-    existing="$(printf '%s' "$line" | sed -nE 's/.*\[([^]]*)\].*/\1/p' | norm)"
+    # The first bracket group is the architecture list. A greedy match takes the last one instead,
+    # which is the source repo name.
+    existing="$(printf '%s' "$line" | sed -nE 's/^[^[]*\[([^]]*)\].*/\1/p' | norm)"
     # publish switch keeps the publication's architecture list, so a new architecture yields a
     # tree with no index for it.
     if [ -n "$existing" ] && [ "$existing" != "$(printf '%s' "$archs" | norm)" ]; then
@@ -211,12 +222,12 @@ for entry in "${ARCHIVES[@]}"; do
     fi
 
     if [ -n "$line" ]; then
-        apt_ly publish switch -gpg-key="$KEYID" -batch "$SUITE" "filesystem:${ep}:" "$snap" >/dev/null
+        apt_ly publish switch "${SIGN_ARGS[@]}" "$SUITE" "filesystem:${ep}:" "$snap" >/dev/null
         echo "    switched $SUITE -> $snap"
     else
-        apt_ly publish snapshot -gpg-key="$KEYID" -batch -architectures="$archs" \
+        apt_ly publish snapshot "${SIGN_ARGS[@]}" -architectures="$archs" \
             -distribution="$SUITE" -component=main "$snap" "filesystem:${ep}:" >/dev/null
-        echo "    published noble-nightly -> $snap [$archs]"
+        echo "    published $SUITE -> $snap [$archs]"
     fi
 done
 
