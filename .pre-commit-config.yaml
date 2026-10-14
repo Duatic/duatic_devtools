@@ -28,8 +28,23 @@ repos:
       - id: debug-statements
       - id: end-of-file-fixer
       - id: mixed-line-ending
+        args: [--fix=lf]
       - id: trailing-whitespace
       - id: check-byte-order-marker  # Forbid UTF-8 byte-order markers
+
+  # Indent with spaces, never tabs
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.6
+    hooks:
+      - id: remove-tabs
+        args: [--whitespaces-count, '2']
+
+  # YAML indent width
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: ['-d', '{rules: {indentation: {spaces: 2, indent-sequences: consistent}}}']
 
   # GitHub Actions workflow linting
   - repo: https://github.com/rhysd/actionlint
@@ -51,7 +66,7 @@ repos:
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.17.0
     hooks:
-    -   id: pyupgrade
+      - id: pyupgrade
         args: [--py36-plus]
 
   - repo: https://github.com/psf/black
@@ -63,8 +78,8 @@ repos:
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.1
     hooks:
-    - id: flake8
-      args: ["--ignore=E501,W503,E203"]
+      - id: flake8
+        args: ["--ignore=E501,W503,E203"]
 
   # Docs - RestructuredText hooks
   - repo: https://github.com/PyCQA/doc8
