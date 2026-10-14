@@ -26,7 +26,8 @@ archive serves every ROS distro built for that Ubuntu.
 ## formatting
 
 `.pre-commit-config.yaml` is the configuration every repository runs. Python is formatted by `black`
-at 100 columns, with `flake8` ignoring what black already decides.
+at 100 columns, with `flake8` ignoring what black already decides. Line endings are LF and tabs are
+replaced by spaces.
 
 `pre-commit` reads a config only from the root of the repository being checked, so repositories copy
 the file in rather than reference it. Pin a tag rather than `main` to hold a repository to a known
