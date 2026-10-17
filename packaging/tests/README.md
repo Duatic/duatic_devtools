@@ -9,6 +9,7 @@ build_fixtures.sh         build every fixture into a .deb, using builder/build_p
 fixtures/                 seven minimal packages, generated
 probes/                   two hand-written packages that test dependency resolution
 install_test.sh           install from the local flat repository
+open_roots_test.sh        open roots refuse dependencies on gated packages
 ```
 
 ## The fixtures
@@ -54,6 +55,13 @@ docker run --rm -it \
   -v "$PWD:/tests:ro" \
   ros:jazzy-ros-base \
   /tests/install_test.sh [package]
+```
+
+`open_roots_test.sh` runs `add_and_publish.sh` against throwaway archives with docker stubbed out,
+so nothing is signed or published. It needs `dpkg-deb`:
+
+```bash
+docker run --rm -v "$PWD/..:/packaging:ro" ubuntu:24.04 /packaging/tests/open_roots_test.sh
 ```
 
 Checks that exercise a gateway, rather than the archive tree itself, live with the gateway. That
