@@ -12,6 +12,10 @@ on:
         description: 'Run every job regardless of which paths changed'
         type: boolean
         default: false
+      runner:
+        description: 'Runner label for every job'
+        type: string
+        default: ubuntu-latest
 
 permissions:
   contents: read
@@ -20,7 +24,7 @@ jobs:
   # One git diff, reused by every job below. Cheaper than a path filter per job, and it keeps the
   # gating rules in one place.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     outputs:
       builder: ${{ steps.filter.outputs.builder }}
       archive: ${{ steps.filter.outputs.archive }}
@@ -46,7 +50,7 @@ jobs:
           has() { echo "$changed" | grep -qE "$1"; }
           {
               has '^packaging/(builder|tests)/'        && echo "builder=true" || echo "builder=false"
-              has '^packaging/archive/'                && echo "archive=true" || echo "archive=false"
+              has '^packaging/(archive/|tests/open_roots_test\.sh$)' && echo "archive=true" || echo "archive=false"
               has '^packaging/tests/'                  && echo "tests=true"   || echo "tests=false"
               has '\.sh$'                              && echo "shell=true"   || echo "shell=false"
           } >> "$GITHUB_OUTPUT"
@@ -54,13 +58,13 @@ jobs:
   format:
     uses: Duatic/ci-workflows/.github/workflows/pre-commit.yml@v1
     with:
-      runner: ubuntu-latest
+      runner: ${{ inputs.runner || 'ubuntu-latest' }}
 
   # Every script, every time one of them changes.
   lint:
     needs: changes
     if: needs.changes.outputs.shell == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -81,7 +85,7 @@ jobs:
   fixtures:
     needs: changes
     if: needs.changes.outputs.tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - name: Regenerate and compare
@@ -94,7 +98,7 @@ jobs:
   builder:
     needs: changes
     if: needs.changes.outputs.builder == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -159,7 +163,7 @@ jobs:
   archive:
     needs: changes
     if: needs.changes.outputs.archive == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -174,3 +178,6 @@ jobs:
             || { echo "::error::guard missing from publish_archives.sh"; exit 1; }
           grep -q 'EXPECTED_KEY_FPR' packaging/archive/publish_archives.sh \
             || { echo "::error::fingerprint check missing"; exit 1; }
+
+      - name: Open roots refuse dependencies on gated packages
+        run: packaging/tests/open_roots_test.sh
