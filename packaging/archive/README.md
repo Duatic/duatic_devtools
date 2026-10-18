@@ -22,6 +22,30 @@ dist/private/<root>/    every other root, one tree each
 A root is whatever a package declares, so adding one needs no configuration beyond the package
 declaring it.
 
+## Open and gated roots
+
+`public` is open: anyone may fetch from it. So is every root named in `OPEN_ROOTS`, a comma or
+space separated list given to `add_and_publish.sh`. Every other root is gated.
+
+An open package must depend only on open or public packages, since a client that can fetch it may
+not be able to fetch anything else. `add_and_publish.sh` refuses to publish when a `Depends` or
+`Pre-Depends` relation of any package in an open root can only be met from gated roots. On every run
+it checks every open root listed for `$DISTRO`, as routed once the delivered packages are added, so
+routing a package an open one depends on into a gated root is refused too. A refused run changes no
+list.
+
+- In `a | b`, one open alternative is enough.
+- A name provided by a listed package, through its `Provides`, is published in that package's root.
+- Only the lists for `$DISTRO` count. A name listed for another distro is not published for this one.
+- A name routed to no root in `lists/` is outside this archive, such as a distribution or ROS
+  package, and passes.
+- Only names are compared. Version constraints are not checked.
+- Every `.deb` of a listed package is checked, in `out/` and in `../builder/out`, the builder output
+  `publish_archives.sh` reads as `/builder-out`. A listed package with neither is reported with a
+  `WARN` and not checked.
+- Every version present is published, so a refused `.deb` that is not the newest is named as stale.
+  Remove it to publish.
+
 ## Run order
 
 Given `.deb` files in `out/` and package lists in `lists/`, produced by

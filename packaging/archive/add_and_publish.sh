@@ -36,6 +36,8 @@ OS_VERSION="${OS_VERSION:-noble}"
 CHANNEL="${CHANNEL:-nightly}"
 SUITE="${SUITE:-${OS_VERSION}-${CHANNEL}}"
 IMAGE="${IMAGE:-ubuntu:24.04}"
+# Roots besides public that are open, comma or space separated. Every other root is gated.
+OPEN_ROOTS="${OPEN_ROOTS:-}"
 
 [ $# -gt 0 ] || { echo "FATAL: no <package>:<root>:<version> specs given" >&2; exit 1; }
 [ -x "$ARCHIVE/publish_archives.sh" ] \
@@ -46,7 +48,27 @@ IMAGE="${IMAGE:-ubuntu:24.04}"
 cd "$ARCHIVE"
 [ -d lists ] || { echo "FATAL: no lists/ in $ARCHIVE. Run gen_release_set.sh first." >&2; exit 1; }
 
+# Open roots are fetchable without an entitlement.
+OPEN=(public)
+for r in ${OPEN_ROOTS//,/ }; do
+    if ! printf '%s' "$r" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/+~-]*$' || [ "$r" = "unrouted" ]; then
+        echo "FATAL: OPEN_ROOTS names an invalid root '$r'" >&2; exit 1
+    fi
+    OPEN+=("$r")
+done
+is_open() { local o; for o in "${OPEN[@]}"; do [ "$1" = "$o" ] && return 0; done; return 1; }
+
+# The package names in each root for this distro. Lists are only written once the check passes.
+declare -A PKGS_IN=()
+for f in lists/*-"${DISTRO}".txt; do
+    [ -f "$f" ] || continue
+    r="$(sed -n 's/^# root: //p' "$f" | head -1)"
+    [ -n "$r" ] || { echo "FATAL: $f declares no root" >&2; exit 1; }
+    PKGS_IN["$r"]="${PKGS_IN[$r]:-} $(sed '/^#/d' "$f" | tr '\n' ' ')"
+done
+
 echo "--- routing packages to archive roots"
+ROUTE_PKG=(); ROUTE_ROOT=(); ROUTE_LIST=()
 for spec in "$@"; do
     case "$spec" in *:*:*) ;; *) echo "FATAL: malformed spec '$spec'" >&2; exit 1 ;; esac
     # Split on the first two colons only: a Debian version may carry an epoch, as in 1:2.0.
@@ -78,9 +100,94 @@ for spec in "$@"; do
     # prunes it. A list outside its <root>-<distro>.txt scheme is never cleaned up, and a
     # package that moves to a different root stays published under the old one.
     list="lists/$(printf '%s' "$root" | tr '/' '-')-${DISTRO}.txt"
-    [ -f "$list" ] || printf '# root: %s\n' "$root" > "$list"
-    grep -qxF "$pkg" "$list" || printf '%s\n' "$pkg" >> "$list"
+    case " ${PKGS_IN[$root]:-} " in
+        *" $pkg "*) ;;
+        *) PKGS_IN["$root"]="${PKGS_IN[$root]:-} $pkg" ;;
+    esac
+    ROUTE_PKG+=("$pkg"); ROUTE_ROOT+=("$root"); ROUTE_LIST+=("$list")
     echo "    $pkg -> $root  ($list)"
+done
+
+# debs_of <name>: every .deb of <name> in out/ and in the builder output publish_archives.sh reads.
+debs_of() {
+    local d f
+    for d in out ../builder/out; do
+        for f in "$d/$1"_*.deb; do [ -f "$f" ] && printf '%s\n' "$f"; done
+    done
+    return 0
+}
+
+echo "--- checking open roots depend on nothing gated"
+# Every root each name is published in, as a package or through a Provides of one. A name in no
+# list is not published here, so it is expected from the distribution or ROS and passes.
+declare -A ROOTS_OF=()
+for r in "${!PKGS_IN[@]}"; do
+    for name in ${PKGS_IN[$r]}; do
+        ROOTS_OF["$name"]="${ROOTS_OF[$name]:-} $r"
+        mapfile -t debs < <(debs_of "$name")
+        for deb in "${debs[@]}"; do
+            for p in $(dpkg-deb -f "$deb" Provides | sed -E 's/\([^)]*\)//g; s/,/ /g'); do
+                ROOTS_OF["$p"]="${ROOTS_OF[$p]:-} $r"
+            done
+        done
+    done
+done
+
+# Every open root, so a dependency that has become gated-only is caught whichever root this run
+# publishes. Version constraints are not checked, only names.
+dep_fail=0
+for root in "${!PKGS_IN[@]}"; do
+    is_open "$root" || continue
+    for pkg in ${PKGS_IN[$root]}; do
+        mapfile -t debs < <(debs_of "$pkg")
+        if [ ${#debs[@]} -eq 0 ]; then
+            echo "WARN: $pkg in open root $root not checked: no .deb found"
+            continue
+        fi
+        newest=""
+        for deb in "${debs[@]}"; do
+            v="$(dpkg-deb -f "$deb" Version)"
+            if [ -z "$newest" ] || dpkg --compare-versions "$v" gt "$newest"; then newest="$v"; fi
+        done
+        for deb in "${debs[@]}"; do
+            deps="$({ dpkg-deb -f "$deb" Depends; echo ,; dpkg-deb -f "$deb" Pre-Depends; } | tr '\n' ' ')"
+            IFS=',' read -r -a relations <<< "$deps"
+            for rel in "${relations[@]}"; do
+                # Drop version constraints, architecture qualifiers and whitespace.
+                rel="$(printf '%s' "$rel" | sed -E 's/\([^)]*\)//g; s/:[a-z0-9-]+//g; s/[[:space:]]+//g')"
+                [ -n "$rel" ] || continue
+                ok=0; gated=()
+                IFS='|' read -r -a alts <<< "$rel"
+                for alt in "${alts[@]}"; do
+                    roots="${ROOTS_OF[$alt]:-}"
+                    [ -n "$roots" ] || { ok=1; break; }
+                    for r in $roots; do is_open "$r" && { ok=1; break; }; done
+                    [ "$ok" = 1 ] && break
+                    gated+=("$alt in${roots}")
+                done
+                [ "$ok" = 1 ] && continue
+                echo "FATAL: $(basename "$deb") in open root '$root' depends on '$rel'," >&2
+                echo "  which is published only in gated roots: ${gated[*]}" >&2
+                v="$(dpkg-deb -f "$deb" Version)"
+                if [ "$v" != "$newest" ]; then
+                    echo "  It is version $v, not the newest $pkg present ($newest)." >&2
+                    echo "  A stale .deb is still published: remove it from $(dirname "$deb")/." >&2
+                fi
+                dep_fail=1
+            done
+        done
+    done
+done
+[ "$dep_fail" = 0 ] || {
+    echo "  An open package may depend only on open or public packages, or on ones outside this archive." >&2
+    echo "  No routing list was changed." >&2
+    exit 1
+}
+
+for i in "${!ROUTE_PKG[@]}"; do
+    list="${ROUTE_LIST[$i]}"
+    [ -f "$list" ] || printf '# root: %s\n' "${ROUTE_ROOT[$i]}" > "$list"
+    grep -qxF "${ROUTE_PKG[$i]}" "$list" || printf '%s\n' "${ROUTE_PKG[$i]}" >> "$list"
 done
 
 echo "--- publishing"
