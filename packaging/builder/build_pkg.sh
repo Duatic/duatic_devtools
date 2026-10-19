@@ -99,6 +99,8 @@ rosdep update --rosdistro "$ROS_DISTRO_ARG"
 # the repository root and writes one per package; only this package's is kept.
 # Locate the package: `<repo>/<package_name>/` is a convention, not a rule.
 cd "$SRC"
+# The container runs as root over a host-owned checkout, which git otherwise refuses to read.
+git config --global --add safe.directory "$SRC" 2>/dev/null || true
 PKG_DIR=""
 while IFS= read -r px; do
     if grep -q "<name>[[:space:]]*$PKG[[:space:]]*</name>" "$px" 2>/dev/null; then
@@ -113,7 +115,6 @@ echo "--- generating CHANGELOG.rst (written back into the repo)"
 if [ -f "$PKG_DIR/CHANGELOG.rst" ]; then
     echo "    $PKG_DIR/CHANGELOG.rst already present, leaving it alone"
 else
-    git config --global --add safe.directory "$SRC" 2>/dev/null || true
     pre_existing="$(find . -name CHANGELOG.rst)"
     catkin_generate_changelog --all
     find . -name CHANGELOG.rst | while read -r f; do
