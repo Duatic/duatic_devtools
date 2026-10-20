@@ -9,7 +9,7 @@ build_fixtures.sh         build every fixture into a .deb, using builder/build_p
 fixtures/                 seven minimal packages, generated
 probes/                   two hand-written packages that test dependency resolution
 install_test.sh           install from the local flat repository
-open_roots_test.sh        open roots refuse dependencies on gated packages
+open_roots_test.sh        open roots refuse dependencies on gated packages, and carry sources
 ```
 
 ## The fixtures

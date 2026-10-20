@@ -46,8 +46,8 @@ archive() {
     printf '#!/bin/sh\n' > "$A/publish_archives.sh"; chmod +x "$A/publish_archives.sh"
 }
 
-# deb <name> <root> [depends] [provides]: build a package declaring <root>, without routing it.
-# VER sets its version and DIR where it is written.
+# deb <name> <root> [depends] [provides]: build a package declaring <root>, and its source tarball,
+# without routing it. VER sets its version and DIR where it is written.
 deb() {
     local d="$TMP/build/$1"
     mkdir -p "$d/DEBIAN"
@@ -59,6 +59,7 @@ deb() {
         [ -z "${4:-}" ] || echo "Provides: $4"
     } > "$d/DEBIAN/control"
     dpkg-deb --build "$d" "${DIR:-$A/out}/${1}_${VER:-1.0}_all.deb" >/dev/null
+    : > "${DIR:-$A/out}/${1}_${VER:-1.0}.src.tar.gz"
     rm -r "$d"
 }
 
@@ -196,5 +197,28 @@ VER=0.9 pkg app public lib-gated
 VER=1.1 deb app public
 expect fail "a stale version depending on a gated package" app:public:1.1 \
     "A stale .deb is still published: remove it from out/."
+
+# placed <description> <path>: check a source tarball was placed at <path> under the archive.
+placed() {
+    if [ -f "$A/$2" ]; then echo "    ok    $1"; else echo "    FAIL  $1"; fail=1; fi
+}
+
+archive sources
+pkg app public
+pkg lib-gated products/a
+expect pass "an open package with its source" app:public:1.0
+placed "its source is placed in the open root" dist/public/sources/app/app_1.0.src.tar.gz
+expect pass "a gated package" lib-gated:products/a:1.0
+if [ -e "$A/dist/private/products/a/sources" ]; then
+    echo "    FAIL  a gated package's source is not placed"; fail=1
+else
+    echo "    ok    a gated package's source is not placed"
+fi
+
+archive no-source
+pkg app public
+rm "$A/out/app_1.0.src.tar.gz"
+expect fail "an open package without its source" app:public:1.0 \
+    "no out/app_1.0.src.tar.gz"
 
 exit "$fail"

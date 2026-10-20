@@ -48,6 +48,12 @@ A build from a tree with uncommitted changes is marked `-dirty`. If the source i
 checkout the field reads `unknown` rather than being omitted, so its absence means an old package
 rather than a clean build.
 
+## Source
+
+Each build also writes `<package>_<version>.src.tar.gz` to `out/`: the package tree as built, plus
+every dependency FetchContent populated, under `_deps/`. The archive publishes it beside the
+package in an open root. It is the same file whichever architecture built it.
+
 ## Index what was built
 
 ```bash

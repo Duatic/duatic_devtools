@@ -190,6 +190,24 @@ for i in "${!ROUTE_PKG[@]}"; do
     grep -qxF "${ROUTE_PKG[$i]}" "$list" || printf '%s\n' "${ROUTE_PKG[$i]}" >> "$list"
 done
 
+echo "--- placing sources in open roots"
+# Before publishing, so an open package is never served without its source. A gated root gets
+# none: whoever may fetch a licensed binary is not offered its source.
+for spec in "$@"; do
+    pkg="${spec%%:*}"; rest="${spec#*:}"
+    root="${rest%%:*}"; ver="${rest#*:}"
+    is_open "$root" || continue
+    src="out/${pkg}_${ver}.src.tar.gz"
+    [ -f "$src" ] || { echo "FATAL: no $src in $ARCHIVE: an open package is published with its source" >&2; exit 1; }
+    case "$root" in
+        public) tree="dist/public" ;;
+        *)      tree="dist/private/$root" ;;
+    esac
+    mkdir -p "$tree/sources/$pkg"
+    cp "$src" "$tree/sources/$pkg/"
+    echo "    $pkg $ver -> $tree/sources/$pkg/"
+done
+
 echo "--- publishing"
 # The passphrase file is named as the container sees it, since that is where gpg runs.
 pass_args=()

@@ -225,11 +225,30 @@ source "/opt/ros/$ROS_DISTRO_ARG/setup.bash"
 set -u
 fakeroot debian/rules binary
 
-# ---------------------------------------------------------------- 5. collect + inspect
+# ---------------------------------------------------------------- 5. source
+# What the build compiled: the package tree and every dependency FetchContent populated. An open
+# archive publishes it beside the binary, since GPL code is distributed with its source.
+SRC_NAME="$(dpkg-parsechangelog -S Source)_$(dpkg-parsechangelog -S Version)"
+STAGE="$BUILD/source/$SRC_NAME"
+mkdir -p "$STAGE"
+cp -a "$SRC/$PKG_DIR/." "$STAGE/"
+shopt -s nullglob
+for dep in "$BUILD/$PKG"/.obj-*/_deps/*-src; do
+    mkdir -p "$STAGE/_deps"
+    cp -a "$dep" "$STAGE/_deps/"
+done
+shopt -u nullglob
+find "$STAGE" -name .git -prune -exec rm -rf {} +
+# Fixed order, owner and time, so every architecture's build writes the same bytes.
+tar --sort=name --mtime="@$(dpkg-parsechangelog -S Timestamp)" --owner=0 --group=0 --numeric-owner \
+    -C "$BUILD/source" -cf - "$SRC_NAME" | gzip -n > "$BUILD/$SRC_NAME.src.tar.gz"
+echo "--- source $SRC_NAME.src.tar.gz: $(tar -tzf "$BUILD/$SRC_NAME.src.tar.gz" | grep -c '[^/]$') files"
+
+# ---------------------------------------------------------------- 6. collect + inspect
 # Debug packages use a .ddeb extension, which a *.deb glob misses.
 mkdir -p "$OUT"
 shopt -s nullglob
-artifacts=("$BUILD"/*.deb "$BUILD"/*.ddeb)
+artifacts=("$BUILD"/*.deb "$BUILD"/*.ddeb "$BUILD"/*.src.tar.gz)
 shopt -u nullglob
 [ ${#artifacts[@]} -gt 0 ] || { echo "FATAL: no packages produced in $BUILD" >&2; exit 1; }
 cp "${artifacts[@]}" "$OUT"/
