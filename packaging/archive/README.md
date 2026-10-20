@@ -31,8 +31,10 @@ writes:
 <root tree>/sources/<package>/<package>_<version>.src.tar.gz
 ```
 
-`add_and_publish.sh` places it before publishing and refuses to publish an open package without
-one, so code under the GPL is never served without its source. A gated root gets no sources.
+A package opts in with `<duatic_publish_source>true</duatic_publish_source>` in its `<export>`,
+which `build_pkg.sh` carries into the binary as `Duatic-Publish-Source`. `add_and_publish.sh`
+places the tarball before publishing and refuses a package declaring it without one, so its code is
+never served without its source. A gated root gets no sources.
 
 ## Open and gated roots
 
