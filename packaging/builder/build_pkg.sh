@@ -159,9 +159,15 @@ if [ "$GIT_COMMIT" != "unknown" ] && ! git -C "$SRC" diff --quiet HEAD 2>/dev/nu
 fi
 GIT_URL="$(git -C "$SRC" config --get remote.origin.url 2>/dev/null || echo unknown)"
 echo "--- source $GIT_COMMIT"
-python3 - "$GIT_COMMIT" "$GIT_URL" <<'PYCTL'
+# Whether the archive publishes this package's source beside it: true, false or undeclared.
+PUBLISH_SOURCE="$(python3 -c "import xml.etree.ElementTree as E; print((E.parse('package.xml').getroot().findtext('export/duatic_publish_source') or '').strip())")"
+case "$PUBLISH_SOURCE" in
+    true | false | "") ;;
+    *) echo "FATAL: <duatic_publish_source> is '$PUBLISH_SOURCE', not true or false" >&2; exit 1 ;;
+esac
+python3 - "$GIT_COMMIT" "$GIT_URL" "$PUBLISH_SOURCE" <<'PYCTL'
 import sys, pathlib, xml.etree.ElementTree as ET
-commit, url = sys.argv[1], sys.argv[2]
+commit, url, publish_source = sys.argv[1], sys.argv[2], sys.argv[3]
 # The root the package declares, carried into the binary so the publish host can check where it
 # is being routed instead of trusting whoever asked. gen_release_set.sh reads the same field.
 root = ''
@@ -184,6 +190,8 @@ for st in stanzas:
             add.append(f'XB-Duatic-Vcs-Url: {url}')
         if root:
             add.append(f'XB-Duatic-Archive-Root: {root}')
+        if publish_source == 'true':
+            add.append('XB-Duatic-Publish-Source: true')
         # Before Description, which continues over following indented lines and has to stay last.
         at = next((i for i, l in enumerate(lines) if l.startswith('Description:')), len(lines))
         lines[at:at] = add
@@ -225,11 +233,41 @@ source "/opt/ros/$ROS_DISTRO_ARG/setup.bash"
 set -u
 fakeroot debian/rules binary
 
-# ---------------------------------------------------------------- 5. collect + inspect
+# ---------------------------------------------------------------- 5. source
+# What the build compiled: the package tree and every dependency FetchContent populated. An open
+# archive publishes it beside the binary when the package declares <duatic_publish_source>.
+shopt -s nullglob
+fetched=("$BUILD/$PKG"/.obj-*/_deps/*-src)
+shopt -u nullglob
+# Fetched code may be GPL, which is distributed with its source, so its package has to decide.
+if [ ${#fetched[@]} -gt 0 ] && [ -z "$PUBLISH_SOURCE" ]; then
+    echo "FATAL: the build fetched $(printf '%s ' "${fetched[@]##*/}")but $PKG does not declare" >&2
+    echo "  whether the archive publishes its source. Add to the <export> of its package.xml:" >&2
+    echo "    <duatic_publish_source>true</duatic_publish_source>" >&2
+    echo "  or false if no fetched licence requires it." >&2
+    exit 1
+fi
+if [ "$PUBLISH_SOURCE" = true ]; then
+    SRC_NAME="$(dpkg-parsechangelog -S Source)_$(dpkg-parsechangelog -S Version)"
+    STAGE="$BUILD/source/$SRC_NAME"
+    mkdir -p "$STAGE"
+    cp -a "$SRC/$PKG_DIR/." "$STAGE/"
+    for dep in "${fetched[@]}"; do
+        mkdir -p "$STAGE/_deps"
+        cp -a "$dep" "$STAGE/_deps/"
+    done
+    find "$STAGE" -name .git -prune -exec rm -rf {} +
+    # Fixed order, owner and time, so every architecture's build writes the same bytes.
+    tar --sort=name --mtime="@$(dpkg-parsechangelog -S Timestamp)" --owner=0 --group=0 --numeric-owner \
+        -C "$BUILD/source" -cf - "$SRC_NAME" | gzip -n > "$BUILD/$SRC_NAME.src.tar.gz"
+    echo "--- source $SRC_NAME.src.tar.gz: $(tar -tzf "$BUILD/$SRC_NAME.src.tar.gz" | grep -c '[^/]$') files"
+fi
+
+# ---------------------------------------------------------------- 6. collect + inspect
 # Debug packages use a .ddeb extension, which a *.deb glob misses.
 mkdir -p "$OUT"
 shopt -s nullglob
-artifacts=("$BUILD"/*.deb "$BUILD"/*.ddeb)
+artifacts=("$BUILD"/*.deb "$BUILD"/*.ddeb "$BUILD"/*.src.tar.gz)
 shopt -u nullglob
 [ ${#artifacts[@]} -gt 0 ] || { echo "FATAL: no packages produced in $BUILD" >&2; exit 1; }
 cp "${artifacts[@]}" "$OUT"/

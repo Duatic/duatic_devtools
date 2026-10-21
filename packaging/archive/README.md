@@ -22,6 +22,20 @@ dist/private/<root>/    every other root, one tree each
 A root is whatever a package declares, so adding one needs no configuration beyond the package
 declaring it.
 
+## Sources
+
+An open root carries each package's source beside its binaries, as the tarball `build_pkg.sh`
+writes:
+
+```
+<root tree>/sources/<package>/<package>_<version>.src.tar.gz
+```
+
+A package opts in with `<duatic_publish_source>true</duatic_publish_source>` in its `<export>`,
+which `build_pkg.sh` carries into the binary as `Duatic-Publish-Source`. `add_and_publish.sh`
+places the tarball before publishing and refuses a package declaring it without one, so its code is
+never served without its source. A gated root gets no sources.
+
 ## Open and gated roots
 
 `public` is open: anyone may fetch from it. So is every root named in `OPEN_ROOTS`, a comma or

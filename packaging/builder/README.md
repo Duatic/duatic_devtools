@@ -48,6 +48,16 @@ A build from a tree with uncommitted changes is marked `-dirty`. If the source i
 checkout the field reads `unknown` rather than being omitted, so its absence means an old package
 rather than a clean build.
 
+## Source
+
+A package declaring `<duatic_publish_source>true</duatic_publish_source>` in its `<export>` also
+gets `<package>_<version>.src.tar.gz` in `out/`: the package tree as built, plus every dependency
+FetchContent populated, under `_deps/`. The archive publishes it beside the package in an open
+root. It is the same file whichever architecture built it.
+
+A build that fetched anything fails unless the package declares the field, `true` or `false`:
+fetched code may be GPL, which is distributed with its source.
+
 ## Index what was built
 
 ```bash

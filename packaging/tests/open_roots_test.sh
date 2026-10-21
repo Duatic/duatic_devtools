@@ -47,7 +47,8 @@ archive() {
 }
 
 # deb <name> <root> [depends] [provides]: build a package declaring <root>, without routing it.
-# VER sets its version and DIR where it is written.
+# VER sets its version and DIR where it is written. SOURCE=1 declares Duatic-Publish-Source and
+# writes its source tarball.
 deb() {
     local d="$TMP/build/$1"
     mkdir -p "$d/DEBIAN"
@@ -57,8 +58,10 @@ deb() {
         echo "Duatic-Archive-Root: $2"
         [ -z "${3:-}" ] || echo "Depends: $3"
         [ -z "${4:-}" ] || echo "Provides: $4"
+        [ -z "${SOURCE:-}" ] || echo "Duatic-Publish-Source: true"
     } > "$d/DEBIAN/control"
     dpkg-deb --build "$d" "${DIR:-$A/out}/${1}_${VER:-1.0}_all.deb" >/dev/null
+    [ -z "${SOURCE:-}" ] || : > "${DIR:-$A/out}/${1}_${VER:-1.0}.src.tar.gz"
     rm -r "$d"
 }
 
@@ -196,5 +199,32 @@ VER=0.9 pkg app public lib-gated
 VER=1.1 deb app public
 expect fail "a stale version depending on a gated package" app:public:1.1 \
     "A stale .deb is still published: remove it from out/."
+
+# placed <description> <path>: check a source tarball was placed at <path> under the archive.
+placed() {
+    if [ -f "$A/$2" ]; then echo "    ok    $1"; else echo "    FAIL  $1"; fail=1; fi
+}
+
+# absent <description> <path>: check nothing was placed at <path> under the archive.
+absent() {
+    if [ -e "$A/$2" ]; then echo "    FAIL  $1"; fail=1; else echo "    ok    $1"; fi
+}
+
+archive sources
+SOURCE=1 pkg app public
+SOURCE=1 pkg lib-gated products/a
+pkg plain public
+expect pass "an open package declaring its source" app:public:1.0
+placed "its source is placed in the open root" dist/public/sources/app/app_1.0.src.tar.gz
+expect pass "a gated package declaring its source" lib-gated:products/a:1.0
+absent "a gated package's source is not placed" dist/private/products/a/sources
+expect pass "an open package that declares nothing" plain:public:1.0
+absent "a package that declares nothing gets no source" dist/public/sources/plain
+
+archive no-source
+SOURCE=1 pkg app public
+rm "$A/out/app_1.0.src.tar.gz"
+expect fail "an open package declaring its source, without one" app:public:1.0 \
+    "no out/app_1.0.src.tar.gz"
 
 exit "$fail"
