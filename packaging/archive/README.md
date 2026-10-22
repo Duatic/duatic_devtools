@@ -22,6 +22,12 @@ dist/private/<root>/    every other root, one tree each
 A root is whatever a package declares, so adding one needs no configuration beyond the package
 declaring it.
 
+Within a root, each Ubuntu release is its own suite, `<ubuntu>-<channel>`, holding every ROS distro
+built on it: humble in `jammy-nightly`, jazzy and kilted in `noble-nightly`, lyrical and rolling in
+`resolute-nightly`. `add_and_publish.sh` derives the Ubuntu release from `DISTRO` (`OS_VERSION`
+overrides it) and publishes that suite from the routing lists of its distros only, so a suite never
+carries a package built for another Ubuntu release.
+
 ## Sources
 
 An open root carries each package's source beside its binaries, as the tarball `build_pkg.sh`
@@ -94,6 +100,14 @@ command="/usr/local/bin/publish-gate products/example",restrict ssh-ed25519 AAAA
 The permitted roots come from that line rather than from the request, because `authorized_keys` is
 the one place the caller cannot edit. A key pinned to one root cannot reach another, cannot reach
 the open archive, and cannot run anything else on the host.
+
+The distro comes from the same line. `DISTRO=jazzy` fixes it, whatever the request says.
+`DISTROS='humble jazzy kilted lyrical rolling'` lists the ones the key may publish instead, and the
+request picks one with `DISTRO=<distro>`:
+
+```
+command="DISTROS='humble jazzy kilted' /usr/local/bin/publish-gate public",restrict ssh-ed25519 AAAA... ci
+```
 
 This is host state. It is not in this repository and is not reviewed when this repository is,
 which is the point: what is being constrained must not be able to edit the constraint. It also

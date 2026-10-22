@@ -50,7 +50,7 @@ jobs:
           has() { echo "$changed" | grep -qE "$1"; }
           {
               has '^packaging/(builder|tests)/'        && echo "builder=true" || echo "builder=false"
-              has '^packaging/(archive/|tests/open_roots_test\.sh$)' && echo "archive=true" || echo "archive=false"
+              has '^packaging/(archive/|tests/(open_roots|publish_gate)_test\.sh$)' && echo "archive=true" || echo "archive=false"
               has '^packaging/tests/'                  && echo "tests=true"   || echo "tests=false"
               has '\.sh$'                              && echo "shell=true"   || echo "shell=false"
           } >> "$GITHUB_OUTPUT"
@@ -181,3 +181,6 @@ jobs:
 
       - name: Open roots refuse dependencies on gated packages
         run: packaging/tests/open_roots_test.sh
+
+      - name: The publish gate passes only permitted roots and distros
+        run: packaging/tests/publish_gate_test.sh

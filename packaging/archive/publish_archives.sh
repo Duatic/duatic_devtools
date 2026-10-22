@@ -56,9 +56,17 @@ LISTS="${LISTS:-$WORK/lists}"
 # packages that declared nothing, and publishing them would guess at who may fetch them.
 [ -d "$LISTS" ] || { echo "FATAL: no package lists at $LISTS. Run gen_release_set.sh first." >&2; exit 1; }
 
+# The distros published into this suite, space separated. Empty reads every list, so a suite would
+# mix packages built for different Ubuntu releases; add_and_publish.sh always sets it.
+LIST_DISTROS="${LIST_DISTROS:-}"
+
 declare -A ROOT_SET=()
 for f in "$LISTS"/*.txt; do
     [ -f "$f" ] || continue
+    if [ -n "$LIST_DISTROS" ]; then
+        d="${f##*-}"; d="${d%.txt}"
+        case " $LIST_DISTROS " in *" $d "*) ;; *) continue ;; esac
+    fi
     root="$(sed -n 's/^# root: //p' "$f" | head -1)"
     [ -n "$root" ] || { echo "FATAL: $f declares no root" >&2; exit 1; }
     if [ "$root" = "unrouted" ]; then
