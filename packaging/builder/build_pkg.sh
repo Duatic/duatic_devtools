@@ -42,6 +42,7 @@ ROS_DISTRO_ARG="${ROS_DISTRO:-jazzy}"
 # Rolling has no such commitment: it tracks whatever Ubuntu ROS's own tooling currently targets,
 # so this entry is a snapshot that we have to revalidate.
 case "$ROS_DISTRO_ARG" in
+    humble) os_version_default=jammy ;;
     jazzy | kilted) os_version_default=noble ;;
     lyrical) os_version_default=resolute ;;
     rolling) os_version_default=resolute ;;
