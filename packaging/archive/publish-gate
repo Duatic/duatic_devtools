@@ -33,6 +33,11 @@
 #
 # The client sends "<package>:<root>:<version> ..." as it would to add_and_publish.sh, and every
 # root in it must be one this key was pinned to.
+#
+# DISTRO set on the line fixes the distro. DISTROS instead names the ones a key may publish, and the
+# request picks one with DISTRO=<distro>:
+#
+#   command="DISTROS='humble jazzy kilted lyrical rolling' /usr/local/bin/publish-gate public",...
 
 set -euo pipefail
 
@@ -60,7 +65,7 @@ esac
 
 # The specs the request names, and nothing else it says: a caller sends the command line it would
 # run against a host with no gate. None of it is executed, so a caller cannot choose the key that
-# signs, the distro whose list it joins, or the archive it lands in.
+# signs, a distro the key was not given, or the archive it lands in.
 read -r -a WORDS <<< "$REQUEST"
 SPECS=()
 for w in "${WORDS[@]}"; do
@@ -71,6 +76,21 @@ for w in "${WORDS[@]}"; do
     printf '%s' "$w" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/+~:-]*$' || continue
     SPECS+=("$w")
 done
+if [ -n "${DISTROS:-}" ]; then
+    asked=""
+    for w in "${WORDS[@]}"; do
+        case "$w" in DISTRO=*) asked="${w#DISTRO=}" ;; esac
+    done
+    asked="${asked//\'/}"; asked="${asked//\"/}"
+    [ -n "$asked" ] || { echo "FATAL: the request names no DISTRO; this key may publish ${DISTROS}" >&2; exit 1; }
+    case " ${DISTROS//,/ } " in
+        *" $asked "*) ;;
+        *) echo "FATAL: this key may not publish for '$asked'" >&2
+           echo "  permitted: ${DISTROS}" >&2
+           exit 1 ;;
+    esac
+    export DISTRO="$asked"
+fi
 [ ${#SPECS[@]} -gt 0 ] || {
     echo "FATAL: the request names no <package>:<root>:<version>" >&2
     exit 1

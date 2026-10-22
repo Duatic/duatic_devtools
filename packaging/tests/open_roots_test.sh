@@ -35,7 +35,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 mkdir -p "$TMP/bin"
-printf '#!/bin/sh\n[ "$1" = run ] && touch "$ARCHIVE/published"\nexit 0\n' > "$TMP/bin/docker"
+printf '#!/bin/sh\n[ "$1" = run ] && touch "$ARCHIVE/published" && printf "%%s\\n" "$@" > "$ARCHIVE/docker-args"\nexit 0\n' > "$TMP/bin/docker"
 chmod +x "$TMP/bin/docker"
 
 # archive <name>: start an empty archive for one case, with its builder output in $B.
@@ -75,12 +75,14 @@ pkg() {
 }
 
 fail=0
+export OS_VERSION=noble
 # expect <pass|fail> <description> <spec> [message]: publish, and check whether it got past the
 # dependency check and that it said [message]. A refusal must say why.
 expect() {
     local out
     rm -f "$A/published"
-    out="$(cd "$A" && PATH="$TMP/bin:$PATH" ARCHIVE="$A" DISTRO=test "$ADD" "$3" 2>&1)" || true
+    out="$(cd "$A" && env PATH="$TMP/bin:$PATH" ARCHIVE="$A" DISTRO="${DISTRO:-test}" \
+        ${OS_VERSION:+OS_VERSION="$OS_VERSION"} "$ADD" "$3" 2>&1)" || true
     if [ "$1" = pass ] && [ -f "$A/published" ] \
         && { [ -z "${4:-}" ] || printf '%s' "$out" | grep -qF -- "$4"; }; then
         echo "    ok    $2"
@@ -226,5 +228,31 @@ SOURCE=1 pkg app public
 rm "$A/out/app_1.0.src.tar.gz"
 expect fail "an open package declaring its source, without one" app:public:1.0 \
     "no out/app_1.0.src.tar.gz"
+
+# passed_to_publisher <description> <argument>: check the publisher container was given <argument>.
+passed_to_publisher() {
+    if grep -qxF -- "$2" "$A/docker-args" 2>/dev/null; then
+        echo "    ok    $1"
+    else
+        echo "    FAIL  $1"; sed 's/^/          /' "$A/docker-args" 2>/dev/null; fail=1
+    fi
+}
+
+archive humble
+deb app public
+OS_VERSION= DISTRO=humble expect pass "a humble package" app:public:1.0
+passed_to_publisher "is published into the jammy suite" "OS_VERSION=jammy"
+passed_to_publisher "from the humble lists only" "LIST_DISTROS=humble"
+
+archive kilted
+deb app public
+OS_VERSION= DISTRO=kilted expect pass "a kilted package" app:public:1.0
+passed_to_publisher "shares the noble suite" "OS_VERSION=noble"
+passed_to_publisher "with the other distros on noble" "LIST_DISTROS=kilted jazzy"
+
+archive unknown-distro
+deb app public
+OS_VERSION= DISTRO=nosuch expect fail "a distro with no known Ubuntu release" app:public:1.0 \
+    "no Ubuntu release known for DISTRO=nosuch"
 
 exit "$fail"

@@ -10,6 +10,7 @@ fixtures/                 seven minimal packages, generated
 probes/                   two hand-written packages that test dependency resolution
 install_test.sh           install from the local flat repository
 open_roots_test.sh        open roots refuse dependencies on gated packages, and carry sources
+publish_gate_test.sh      publish-gate passes only permitted roots and distros
 ```
 
 ## The fixtures
@@ -62,6 +63,13 @@ so nothing is signed or published. It needs `dpkg-deb`:
 
 ```bash
 docker run --rm -v "$PWD/..:/packaging:ro" ubuntu:24.04 /packaging/tests/open_roots_test.sh
+```
+
+`publish_gate_test.sh` runs the real `publish-gate` in front of a stub `add_and_publish.sh` and
+checks which roots and distros it lets through:
+
+```bash
+docker run --rm -v "$PWD/..:/packaging:ro" ubuntu:24.04 /packaging/tests/publish_gate_test.sh
 ```
 
 Checks that exercise a gateway, rather than the archive tree itself, live with the gateway. That

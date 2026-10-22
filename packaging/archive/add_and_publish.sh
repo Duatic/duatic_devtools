@@ -32,9 +32,7 @@
 set -euo pipefail
 
 ARCHIVE="${ARCHIVE:-$HOME/archive}"
-OS_VERSION="${OS_VERSION:-noble}"
 CHANNEL="${CHANNEL:-nightly}"
-SUITE="${SUITE:-${OS_VERSION}-${CHANNEL}}"
 IMAGE="${IMAGE:-ubuntu:24.04}"
 # Roots besides public that are open, comma or space separated. Every other root is gated.
 OPEN_ROOTS="${OPEN_ROOTS:-}"
@@ -45,6 +43,27 @@ OPEN_ROOTS="${OPEN_ROOTS:-}"
 # The routing lists are per distro, and appending to the wrong one publishes a package under a
 # distro it was not built for. Named rather than defaulted, because a default would be a guess.
 [ -n "${DISTRO:-}" ] || { echo "FATAL: DISTRO is not set" >&2; exit 1; }
+
+# The Ubuntu release each ROS distro is built on (REP 2000), which names the suite it lands in.
+KNOWN_DISTROS="humble jazzy kilted lyrical rolling"
+ubuntu_for() {
+    case "$1" in
+        humble) echo jammy ;;
+        jazzy | kilted) echo noble ;;
+        lyrical | rolling) echo resolute ;;
+    esac
+}
+OS_VERSION="${OS_VERSION:-$(ubuntu_for "$DISTRO")}"
+[ -n "$OS_VERSION" ] \
+    || { echo "FATAL: no Ubuntu release known for DISTRO=$DISTRO; set OS_VERSION" >&2; exit 1; }
+SUITE="${SUITE:-${OS_VERSION}-${CHANNEL}}"
+# The distros whose lists the suite is published from: those built on the same Ubuntu release.
+LIST_DISTROS="$DISTRO"
+for d in $KNOWN_DISTROS; do
+    if [ "$d" != "$DISTRO" ] && [ "$(ubuntu_for "$d")" = "$OS_VERSION" ]; then
+        LIST_DISTROS="$LIST_DISTROS $d"
+    fi
+done
 cd "$ARCHIVE"
 [ -d lists ] || { echo "FATAL: no lists/ in $ARCHIVE. Run gen_release_set.sh first." >&2; exit 1; }
 
@@ -234,7 +253,7 @@ docker run --rm \
     "${uid_args[@]}" \
     -e "EXPECTED_KEY_FPR=${EXPECTED_KEY_FPR:-}" \
     -e "ALLOW_THROWAWAY_KEY=${ALLOW_THROWAWAY_KEY:-0}" \
-    -e "OS_VERSION=$OS_VERSION" -e "CHANNEL=$CHANNEL" \
+    -e "OS_VERSION=$OS_VERSION" -e "CHANNEL=$CHANNEL" -e "LIST_DISTROS=$LIST_DISTROS" \
     "${pass_args[@]}" \
     -v "$PWD:/work" -v "$PWD/out:/out" -v "$PWD/dist:/dist" \
     "$IMAGE" /work/publish_archives.sh
