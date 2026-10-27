@@ -39,8 +39,9 @@ archive. If one of its dependencies has not been published yet, `mk-build-deps` 
 `workspace/build_all.sh` rebuilds the whole set in dependency order. Use it for a new ROS distro, a
 new Ubuntu release, or a toolchain change.
 
-Publishing to `nightly` is automatic. Promotion to `stable` is `aptly publish switch`, which moves
-a pointer. Never rebuild to promote: a mirror holding `1.0.0` will not fetch a different `1.0.0`.
+A release publishes to `stable` and a build of main to `edge`. `nightly` is filled by promotion:
+`archive/promote.sh edge nightly` switches it to what `edge` publishes, which moves a pointer and
+builds nothing. Never rebuild to promote: a mirror holding `1.0.0` will not fetch a different `1.0.0`.
 
 ## Secrets
 
