@@ -27,12 +27,16 @@
 # Runs on the publish host, where the signing key is. The packages are expected in $ARCHIVE/out,
 # built elsewhere.
 #
+# Each channel publishes its own deliveries: a delivery arriving in out/ moves to out/<channel>/,
+# and that channel's suites are published from there alone. CHANNEL is stable for releases and
+# edge for builds of main; edge keeps the newest EDGE_KEEP builds of each package (default 3).
+#
 # Usage:  add_and_publish.sh <package>:<root>:<version> [...]
 
 set -euo pipefail
 
 ARCHIVE="${ARCHIVE:-$HOME/archive}"
-CHANNEL="${CHANNEL:-nightly}"
+CHANNEL="${CHANNEL:-stable}"
 IMAGE="${IMAGE:-ubuntu:24.04}"
 # Roots besides public that are open, comma or space separated. Every other root is gated.
 OPEN_ROOTS="${OPEN_ROOTS:-}"
@@ -43,29 +47,31 @@ OPEN_ROOTS="${OPEN_ROOTS:-}"
 # The routing lists are per distro, and appending to the wrong one publishes a package under a
 # distro it was not built for. Named rather than defaulted, because a default would be a guess.
 [ -n "${DISTRO:-}" ] || { echo "FATAL: DISTRO is not set" >&2; exit 1; }
+printf '%s' "$CHANNEL" | grep -qE '^[a-z]+$' || { echo "FATAL: invalid CHANNEL '$CHANNEL'" >&2; exit 1; }
 
-# The Ubuntu release each ROS distro is built on (REP 2000), which names the suite it lands in.
-KNOWN_DISTROS="humble jazzy kilted lyrical rolling"
-ubuntu_for() {
-    case "$1" in
-        humble) echo jammy ;;
-        jazzy | kilted) echo noble ;;
-        lyrical | rolling) echo resolute ;;
-    esac
-}
+# shellcheck source=common.sh
+. "$(dirname "$(readlink -f "$0")")/common.sh"
 OS_VERSION="${OS_VERSION:-$(ubuntu_for "$DISTRO")}"
 [ -n "$OS_VERSION" ] \
     || { echo "FATAL: no Ubuntu release known for DISTRO=$DISTRO; set OS_VERSION" >&2; exit 1; }
 SUITE="${SUITE:-${OS_VERSION}-${CHANNEL}}"
 # The distros whose lists the suite is published from: those built on the same Ubuntu release.
 LIST_DISTROS="$DISTRO"
-for d in $KNOWN_DISTROS; do
-    if [ "$d" != "$DISTRO" ] && [ "$(ubuntu_for "$d")" = "$OS_VERSION" ]; then
-        LIST_DISTROS="$LIST_DISTROS $d"
-    fi
+for d in $(distros_on "$OS_VERSION"); do
+    [ "$d" = "$DISTRO" ] || LIST_DISTROS="$LIST_DISTROS $d"
 done
 cd "$ARCHIVE"
 [ -d lists ] || { echo "FATAL: no lists/ in $ARCHIVE. Run gen_release_set.sh first." >&2; exit 1; }
+
+# Deliveries arrive in out/, and each channel publishes only its own.
+OUT="out/$CHANNEL"
+mkdir -p "$OUT"
+for spec in "$@"; do
+    pkg="${spec%%:*}"; ver="${spec##*:}"
+    for f in "out/${pkg}_${ver}"_*.deb "out/${pkg}-dbgsym_${ver}"_*.ddeb "out/${pkg}_${ver}.src.tar.gz"; do
+        [ -f "$f" ] && mv -f "$f" "$OUT/"
+    done
+done
 
 # Open roots are fetchable without an entitlement.
 OPEN=(public)
@@ -96,12 +102,12 @@ for spec in "$@"; do
     for field in "$pkg" "$root" "$ver"; do
         [ -n "$field" ] || { echo "FATAL: empty field in spec '$spec'" >&2; exit 1; }
     done
-    ls "out/${pkg}"_*.deb >/dev/null 2>&1 \
-        || { echo "FATAL: no ${pkg}_*.deb in $ARCHIVE/out" >&2; exit 1; }
+    ls "$OUT/${pkg}"_*.deb >/dev/null 2>&1 \
+        || { echo "FATAL: no ${pkg}_*.deb in $ARCHIVE/$OUT" >&2; exit 1; }
     # The root the package itself declares, not the one the caller asked for. Routing decides who
     # may fetch a package, so a caller that could name any root could publish a licensed one into
     # the open archive.
-    for deb in "out/${pkg}"_*.deb; do
+    for deb in "$OUT/${pkg}"_*.deb; do
         declared="$(dpkg-deb -f "$deb" Duatic-Archive-Root 2>/dev/null || true)"
         if [ -z "$declared" ]; then
             [ "${ALLOW_UNDECLARED_ROOT:-0}" = "1" ] || {
@@ -127,10 +133,10 @@ for spec in "$@"; do
     echo "    $pkg -> $root  ($list)"
 done
 
-# debs_of <name>: every .deb of <name> in out/ and in the builder output publish_archives.sh reads.
+# debs_of <name>: every .deb of <name> in this channel and in the builder output publish_archives.sh reads.
 debs_of() {
     local d f
-    for d in out ../builder/out; do
+    for d in "$OUT" ../builder/out; do
         for f in "$d/$1"_*.deb; do [ -f "$f" ] && printf '%s\n' "$f"; done
     done
     return 0
@@ -217,12 +223,12 @@ for spec in "$@"; do
     root="${rest%%:*}"; ver="${rest#*:}"
     is_open "$root" || continue
     declares=0
-    for deb in "out/${pkg}"_*.deb; do
+    for deb in "$OUT/${pkg}"_*.deb; do
         [ "$(dpkg-deb -f "$deb" Version)" = "$ver" ] || continue
         [ "$(dpkg-deb -f "$deb" Duatic-Publish-Source 2>/dev/null || true)" = true ] && declares=1
     done
     [ "$declares" = 1 ] || continue
-    src="out/${pkg}_${ver}.src.tar.gz"
+    src="$OUT/${pkg}_${ver}.src.tar.gz"
     [ -f "$src" ] || { echo "FATAL: no $src in $ARCHIVE: $pkg declares that its source is published" >&2; exit 1; }
     case "$root" in
         public) tree="dist/public" ;;
@@ -234,29 +240,16 @@ for spec in "$@"; do
 done
 
 echo "--- publishing"
-# The passphrase file is named as the container sees it, since that is where gpg runs.
-pass_args=()
-if [ -n "${GPG_PASSPHRASE_FILE:-}" ]; then
-    pass_args=(-e "GPG_PASSPHRASE_FILE=$GPG_PASSPHRASE_FILE")
-elif [ -f "$ARCHIVE/.passphrase" ]; then
-    pass_args=(-e "GPG_PASSPHRASE_FILE=/work/.passphrase")
-fi
-# Rootless docker already maps the container's root onto the invoking user, so the files come back
-# owned correctly and publish_archives.sh skips its hand-back when these are unset. Setting them
-# there would chown into the subordinate range instead, which takes the tree away rather than
-# returning it, and does so quietly.
-uid_args=()
-if ! docker info -f '{{.SecurityOptions}}' 2>/dev/null | grep -q rootless; then
-    uid_args=(-e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)")
-fi
+publisher_args
+keep_args=()
+if [ "$CHANNEL" = edge ]; then keep_args=(-e "KEEP_VERSIONS=${EDGE_KEEP:-3}"); fi
 docker run --rm \
-    "${uid_args[@]}" \
-    -e "EXPECTED_KEY_FPR=${EXPECTED_KEY_FPR:-}" \
-    -e "ALLOW_THROWAWAY_KEY=${ALLOW_THROWAWAY_KEY:-0}" \
+    "${PUBLISHER_ARGS[@]}" \
     -e "OS_VERSION=$OS_VERSION" -e "CHANNEL=$CHANNEL" -e "LIST_DISTROS=$LIST_DISTROS" \
-    "${pass_args[@]}" \
-    -v "$PWD:/work" -v "$PWD/out:/out" -v "$PWD/dist:/dist" \
+    "${keep_args[@]}" \
+    -v "$PWD:/work" -v "$PWD/$OUT:/out" -v "$PWD/dist:/dist" \
     "$IMAGE" /work/publish_archives.sh
+if [ "$CHANNEL" = edge ]; then prune_edge_sources; fi
 
 echo "--- verifying the published index"
 # publish_archives.sh skips a root it finds no packages for and still succeeds, so its exit code

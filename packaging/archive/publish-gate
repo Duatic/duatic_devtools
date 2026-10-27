@@ -38,6 +38,13 @@
 # request picks one with DISTRO=<distro>:
 #
 #   command="DISTROS='humble jazzy kilted lyrical rolling' /usr/local/bin/publish-gate public",...
+#
+# CHANNELS names the channels a key may deliver into, and the request picks one with
+# CHANNEL=<channel>; without it the channel is the line's CHANNEL, or stable. PROMOTIONS names the
+# switches a key may make, as <from>:<to>, and a request of PROMOTE=<from>:<to> makes one in the
+# key's roots instead of delivering anything:
+#
+#   command="CHANNELS='stable edge' PROMOTIONS='edge:nightly' ... /usr/local/bin/publish-gate public",...
 
 set -euo pipefail
 
@@ -76,6 +83,40 @@ for w in "${WORDS[@]}"; do
     printf '%s' "$w" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/+~:-]*$' || continue
     SPECS+=("$w")
 done
+# word_value <NAME>: the value of NAME=<value> in the request, without the quotes it was sent in.
+word_value() {
+    local w v=""
+    for w in "${WORDS[@]}"; do
+        case "$w" in "$1="*) v="${w#"$1"=}" ;; esac
+    done
+    v="${v//\'/}"; v="${v//\"/}"
+    printf '%s' "$v"
+}
+
+promote="$(word_value PROMOTE)"
+if [ -n "$promote" ]; then
+    permitted="${PROMOTIONS:-}"
+    case " ${permitted//,/ } " in
+        *" $promote "*) ;;
+        *) echo "FATAL: this key may not promote '$promote'" >&2
+           echo "  permitted: ${PROMOTIONS:-none}" >&2
+           exit 1 ;;
+    esac
+    ROOTS="${ALLOWED[*]}" exec "$(dirname "$(readlink -f "$0")")/promote.sh" "${promote%%:*}" "${promote#*:}"
+fi
+
+if [ -n "${CHANNELS:-}" ]; then
+    channel="$(word_value CHANNEL)"
+    [ -n "$channel" ] || { echo "FATAL: the request names no CHANNEL; this key may deliver into ${CHANNELS}" >&2; exit 1; }
+    case " ${CHANNELS//,/ } " in
+        *" $channel "*) ;;
+        *) echo "FATAL: this key may not deliver into '$channel'" >&2
+           echo "  permitted: ${CHANNELS}" >&2
+           exit 1 ;;
+    esac
+    export CHANNEL="$channel"
+fi
+
 if [ -n "${DISTROS:-}" ]; then
     asked=""
     for w in "${WORDS[@]}"; do

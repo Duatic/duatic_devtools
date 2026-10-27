@@ -58,6 +58,12 @@ root. It is the same file whichever architecture built it.
 A build that fetched anything fails unless the package declares the field, `true` or `false`:
 fetched code may be GPL, which is distributed with its source.
 
+## Builds of main
+
+`DEB_VERSION_SUFFIX` appends to the version from `package.xml`, for a build between releases:
+`DEB_VERSION_SUFFIX=+git20261027153012.ab12cd3` builds `0.4.1+git20261027153012.ab12cd3`, which sorts
+after the release `0.4.1` and before the next one. It starts with `+` or `~`.
+
 ## Index what was built
 
 ```bash

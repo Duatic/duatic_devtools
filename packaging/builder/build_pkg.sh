@@ -152,6 +152,15 @@ echo "--- bloom-generate rosdebian"
 bloom-generate rosdebian \
 --os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
 
+# A build of main between releases, e.g. +git20261027153012.ab12cd3: it sorts after the release it
+# follows and before the next one.
+if [ -n "${DEB_VERSION_SUFFIX:-}" ]; then
+    printf '%s' "$DEB_VERSION_SUFFIX" | grep -qE '^[+~][A-Za-z0-9.+~]+$' \
+        || { echo "FATAL: DEB_VERSION_SUFFIX '$DEB_VERSION_SUFFIX' must start with + or ~" >&2; exit 1; }
+    sed -i -E "1s/^([^ ]+) \(([^-)]+)-/\1 (\2${DEB_VERSION_SUFFIX}-/" debian/changelog
+    echo "--- version $(dpkg-parsechangelog -S Version)"
+fi
+
 # The commit this package was built from. dpkg-gencontrol copies XB- fields into the binary
 # package with the prefix stripped, so a robot answers this with `dpkg -s`.
 GIT_COMMIT="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo unknown)"

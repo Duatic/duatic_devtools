@@ -23,10 +23,28 @@ A root is whatever a package declares, so adding one needs no configuration beyo
 declaring it.
 
 Within a root, each Ubuntu release is its own suite, `<ubuntu>-<channel>`, holding every ROS distro
-built on it: humble in `jammy-nightly`, jazzy and kilted in `noble-nightly`, lyrical and rolling in
-`resolute-nightly`. `add_and_publish.sh` derives the Ubuntu release from `DISTRO` (`OS_VERSION`
+built on it: humble in `jammy-<channel>`, jazzy and kilted in `noble-<channel>`, lyrical and rolling
+in `resolute-<channel>`. `add_and_publish.sh` derives the Ubuntu release from `DISTRO` (`OS_VERSION`
 overrides it) and publishes that suite from the routing lists of its distros only, so a suite never
 carries a package built for another Ubuntu release.
+
+## Channels
+
+| Channel | Holds | Filled by |
+|---|---|---|
+| `stable` | releases; every version stays | `add_and_publish.sh` with `CHANNEL=stable`, the default |
+| `edge` | builds of main; the newest `EDGE_KEEP` (default 3) of each package | `add_and_publish.sh` with `CHANNEL=edge` |
+| `nightly` | what `edge` published when it was last promoted | `promote.sh edge nightly`, nothing built |
+
+Each channel keeps its own aptly repo per root and Ubuntu release, and its own deliveries:
+`add_and_publish.sh` moves a delivery from `out/` into `out/<channel>/` and publishes that channel
+from there, so a channel never carries another's packages. A build of main is versioned
+`<release>+git<commit time>.<commit>`, after the release it follows and before the next one.
+
+On an `edge` publish, the builds past the newest `EDGE_KEEP` leave `out/edge/` and the repo,
+together with their debug symbols and source, and the `edge` snapshots no suite publishes any more
+are dropped with the files only they held. A `+git` source tarball is deleted once no published
+index in its root lists that version, so a build `nightly` still serves keeps its source.
 
 ## Sources
 
@@ -107,6 +125,15 @@ request picks one with `DISTRO=<distro>`:
 
 ```
 command="DISTROS='humble jazzy kilted' /usr/local/bin/publish-gate public",restrict ssh-ed25519 AAAA... ci
+```
+
+The channel works the same way: `CHANNELS='stable edge'` lists the channels a key may deliver into,
+and the request picks one with `CHANNEL=<channel>`. Without it, the line's `CHANNEL`, or `stable`.
+`PROMOTIONS='edge:nightly'` lets a key switch one channel to what another publishes, in its own
+roots, with a request of `PROMOTE=edge:nightly`; such a request delivers nothing:
+
+```
+command="DISTROS='humble jazzy kilted lyrical rolling' CHANNELS='stable edge' PROMOTIONS='edge:nightly' /usr/local/bin/publish-gate public",restrict ssh-ed25519 AAAA... ci
 ```
 
 This is host state. It is not in this repository and is not reviewed when this repository is,
