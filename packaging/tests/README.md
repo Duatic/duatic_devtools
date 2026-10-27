@@ -11,6 +11,7 @@ probes/                   two hand-written packages that test dependency resolut
 install_test.sh           install from the local flat repository
 open_roots_test.sh        open roots refuse dependencies on gated packages, and carry sources
 publish_gate_test.sh      publish-gate passes only permitted roots and distros
+archive_rosdep_test.sh    archive_rosdep.sh maps the dependencies an archive publishes
 ```
 
 ## The fixtures

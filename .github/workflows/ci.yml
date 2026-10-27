@@ -112,6 +112,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Archive dependencies map to their Debian names
+        run: packaging/tests/archive_rosdep_test.sh
+
       - name: Generate the rosdep mapping for ${{ matrix.ros_distro }}
         env:
           ROS_DISTROS: ${{ matrix.ros_distro }}
