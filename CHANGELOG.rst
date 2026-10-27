@@ -2,6 +2,11 @@
 Changelog
 ^^^^^^^^^
 
+1.9.0 (2026-10-27)
+------------------
+* feat(builder): build against packages already published in the archive (#27)
+* docs(packaging): describe the stable, edge and nightly channels (#28)
+
 1.8.0 (2026-10-27)
 ------------------
 * fix(archive): keep each delivery in its channel, one writer at a time (#25)
