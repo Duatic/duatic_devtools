@@ -77,8 +77,10 @@ gate pass "CHANNELS lets the request pick a permitted channel" "DISTRO=jazzy CHA
     "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" "CHANNELS=stable edge" -- public
 gate fail "a channel the key was not given" "this key may not deliver into 'nightly'" \
     "$(request jazzy app:public:1.0 nightly)" "DISTROS=jazzy" "CHANNELS=stable edge" -- public
-gate pass "without CHANNELS the request cannot pick the channel" "DISTRO=jazzy CHANNEL= SPECS=app:public:1.0" \
+gate fail "without CHANNELS a request for another channel is refused" "this key delivers into 'stable', not 'edge'" \
     "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" -- public
+gate pass "without CHANNELS a request for the line's channel goes ahead" "DISTRO=jazzy CHANNEL=edge SPECS=app:public:1.0" \
+    "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" "CHANNEL=edge" -- public
 gate pass "a permitted promotion, in the key's roots" "PROMOTE edge -> nightly ROOTS=public" \
     "PROMOTE='edge:nightly'" "PROMOTIONS=edge:nightly" -- public
 gate fail "a promotion the key was not given" "this key may not promote 'edge:stable'" \

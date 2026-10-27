@@ -256,10 +256,11 @@ OS_VERSION= DISTRO=nosuch expect fail "a distro with no known Ubuntu release" ap
     "no Ubuntu release known for DISTRO=nosuch"
 
 archive inbox
-DIR="$A/out" SOURCE=1 deb app public
-CHANNEL=edge expect pass "a delivery for edge" app:public:1.0
-placed "moves from out/ into the edge channel's out/" out/edge/app_1.0_all.deb
-placed "with its source" out/edge/app_1.0.src.tar.gz
+E=1.0+git20261027153012.ab12cd3
+VER=$E DIR="$A/out" SOURCE=1 deb app public
+CHANNEL=edge expect pass "a delivery for edge" "app:public:$E"
+placed "moves from out/ into the edge channel's out/" "out/edge/app_${E}_all.deb"
+placed "with its source" "out/edge/app_${E}.src.tar.gz"
 passed_to_publisher "edge is published from its own out/" "$A/out/edge:/out"
 passed_to_publisher "and keeps the newest builds" "KEEP_VERSIONS=3"
 passed_to_publisher "into the edge channel" "CHANNEL=edge"
@@ -274,6 +275,13 @@ if grep -qF KEEP_VERSIONS "$A/docker-args"; then
 else
     echo "    ok    stable keeps every release"
 fi
+
+archive channel-versions
+VER=$E DIR="$A/out" deb app public
+expect fail "stable refuses a build of main" "app:public:$E" "is a build of main, and stable takes releases"
+placed "and leaves it in out/" "out/app_${E}_all.deb"
+DIR="$A/out" deb lib public
+CHANNEL=edge expect fail "edge refuses a release" lib:public:1.0 "is not a build of main"
 
 archive locked
 pkg app public

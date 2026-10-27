@@ -273,9 +273,9 @@ for entry in "${ARCHIVES[@]}"; do
     if [ -n "${KEEP_VERSIONS:-}" ]; then
         # The newest builds of each package and architecture stay in the channel. A build's debug
         # symbols and source go with it, so they are judged by the package's own versions.
-        declare -A groups=() keep_build=() keep_source=()
+        declare -A groups=() names=() keep_build=() keep_source=()
         for f in "${found[@]}"; do
-            case "$f" in *.deb) b="$(basename "$f" .deb)"; groups["${b%%_*}|${b##*_}"]=1 ;; esac
+            case "$f" in *.deb) b="$(basename "$f" .deb)"; groups["${b%%_*}|${b##*_}"]=1; names["${b%%_*}"]=1 ;; esac
         done
         for key in "${!groups[@]}"; do
             n=0
@@ -299,10 +299,11 @@ for entry in "${ARCHIVES[@]}"; do
         shopt -s nullglob
         for f in /out/*.src.tar.gz; do
             b="$(basename "$f" .src.tar.gz)"
+            [ -n "${names["${b%%_*}"]:-}" ] || continue
             [ -n "${keep_source["${b%%_*}|${b#*_}"]:-}" ] || { rm -f "$f"; echo "    - $(basename "$f")"; }
         done
         shopt -u nullglob
-        unset groups keep_build keep_source
+        unset groups names keep_build keep_source
         found=("${kept[@]}")
     fi
 

@@ -115,6 +115,13 @@ if [ -n "${CHANNELS:-}" ]; then
            exit 1 ;;
     esac
     export CHANNEL="$channel"
+else
+    # A request for another channel than the line's is refused, not delivered into the line's.
+    channel="$(word_value CHANNEL)"
+    if [ -n "$channel" ] && [ "$channel" != "${CHANNEL:-stable}" ]; then
+        echo "FATAL: this key delivers into '${CHANNEL:-stable}', not '$channel'" >&2
+        exit 1
+    fi
 fi
 
 if [ -n "${DISTROS:-}" ]; then
