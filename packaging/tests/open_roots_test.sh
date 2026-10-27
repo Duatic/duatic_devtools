@@ -275,4 +275,12 @@ else
     echo "    ok    stable keeps every release"
 fi
 
+archive locked
+pkg app public
+exec 8>"$A/.lock"; flock 8
+LOCK_WAIT=1 expect fail "a publish waits for the one holding the archive" app:public:1.0 \
+    "another publish held the archive for 1s"
+exec 8>&-
+expect pass "and goes ahead once it is released" app:public:1.0
+
 exit "$fail"

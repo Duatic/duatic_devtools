@@ -42,6 +42,14 @@ distros_on() {
     printf '%s\n' "${out# }"
 }
 
+# lock_archive: wait for any other publish or promotion on this archive to finish, then hold the
+# archive until this script exits. aptly's database and the routing lists take one writer.
+lock_archive() {
+    exec 9>"$ARCHIVE/.lock"
+    flock -w "${LOCK_WAIT:-1200}" 9 \
+        || { echo "FATAL: another publish held the archive for ${LOCK_WAIT:-1200}s" >&2; exit 1; }
+}
+
 # The docker run arguments every publisher run needs: the passphrase file, named as the container
 # sees it since that is where gpg runs, and the host user to hand files back to.
 publisher_args() {

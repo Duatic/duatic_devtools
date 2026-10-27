@@ -51,6 +51,7 @@ printf '%s' "$CHANNEL" | grep -qE '^[a-z]+$' || { echo "FATAL: invalid CHANNEL '
 
 # shellcheck source=common.sh
 . "$(dirname "$(readlink -f "$0")")/common.sh"
+lock_archive
 OS_VERSION="${OS_VERSION:-$(ubuntu_for "$DISTRO")}"
 [ -n "$OS_VERSION" ] \
     || { echo "FATAL: no Ubuntu release known for DISTRO=$DISTRO; set OS_VERSION" >&2; exit 1; }

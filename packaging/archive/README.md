@@ -46,6 +46,9 @@ together with their debug symbols and source, and the `edge` snapshots no suite 
 are dropped with the files only they held. A `+git` source tarball is deleted once no published
 index in its root lists that version, so a build `nightly` still serves keeps its source.
 
+A publish or promotion holds `$ARCHIVE/.lock` while it runs, and another waits for it, up to
+`LOCK_WAIT` seconds (default 1200).
+
 ## Sources
 
 An open root carries each package's source beside its binaries, as the tarball `build_pkg.sh`
