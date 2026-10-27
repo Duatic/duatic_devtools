@@ -39,12 +39,16 @@ carries a package built for another Ubuntu release.
 Each channel keeps its own aptly repo per root and Ubuntu release, and its own deliveries:
 `add_and_publish.sh` moves a delivery from `out/` into `out/<channel>/` and publishes that channel
 from there, so a channel never carries another's packages. A build of main is versioned
-`<release>+git<commit time>.<commit>`, after the release it follows and before the next one.
+`<release>+git<commit time>.<commit>`, after the release it follows and before the next one;
+`stable` refuses such a version and `edge` takes nothing else.
 
 On an `edge` publish, the builds past the newest `EDGE_KEEP` leave `out/edge/` and the repo,
 together with their debug symbols and source, and the `edge` snapshots no suite publishes any more
 are dropped with the files only they held. A `+git` source tarball is deleted once no published
 index in its root lists that version, so a build `nightly` still serves keeps its source.
+
+A publish or promotion holds `$ARCHIVE/.lock` while it runs, and another waits for it, up to
+`LOCK_WAIT` seconds (default 1200).
 
 ## Sources
 
@@ -128,7 +132,8 @@ command="DISTROS='humble jazzy kilted' /usr/local/bin/publish-gate public",restr
 ```
 
 The channel works the same way: `CHANNELS='stable edge'` lists the channels a key may deliver into,
-and the request picks one with `CHANNEL=<channel>`. Without it, the line's `CHANNEL`, or `stable`.
+and the request picks one with `CHANNEL=<channel>`. Without it, the line's `CHANNEL`, or `stable`, and
+a request naming another channel is refused.
 `PROMOTIONS='edge:nightly'` lets a key switch one channel to what another publishes, in its own
 roots, with a request of `PROMOTE=edge:nightly`; such a request delivers nothing:
 

@@ -45,6 +45,7 @@ done
 
 # shellcheck source=common.sh
 . "$(dirname "$(readlink -f "$0")")/common.sh"
+lock_archive
 cd "$ARCHIVE"
 [ -d lists ] || { echo "FATAL: no lists/ in $ARCHIVE" >&2; exit 1; }
 
