@@ -42,12 +42,12 @@ chmod +x "$TMP/bin/docker"
 archive() {
     A="$TMP/$1/archive"
     B="$TMP/$1/builder/out"
-    mkdir -p "$A/out" "$A/lists" "$B"
+    mkdir -p "$A/out/stable" "$A/lists" "$B"
     printf '#!/bin/sh\n' > "$A/publish_archives.sh"; chmod +x "$A/publish_archives.sh"
 }
 
 # deb <name> <root> [depends] [provides]: build a package declaring <root>, without routing it.
-# VER sets its version and DIR where it is written. SOURCE=1 declares Duatic-Publish-Source and
+# VER sets its version and DIR where it is written, by default the stable channel's out/. SOURCE=1 declares Duatic-Publish-Source and
 # writes its source tarball.
 deb() {
     local d="$TMP/build/$1"
@@ -60,8 +60,8 @@ deb() {
         [ -z "${4:-}" ] || echo "Provides: $4"
         [ -z "${SOURCE:-}" ] || echo "Duatic-Publish-Source: true"
     } > "$d/DEBIAN/control"
-    dpkg-deb --build "$d" "${DIR:-$A/out}/${1}_${VER:-1.0}_all.deb" >/dev/null
-    [ -z "${SOURCE:-}" ] || : > "${DIR:-$A/out}/${1}_${VER:-1.0}.src.tar.gz"
+    dpkg-deb --build "$d" "${DIR:-$A/out/stable}/${1}_${VER:-1.0}_all.deb" >/dev/null
+    [ -z "${SOURCE:-}" ] || : > "${DIR:-$A/out/stable}/${1}_${VER:-1.0}.src.tar.gz"
     rm -r "$d"
 }
 
@@ -82,7 +82,7 @@ expect() {
     local out
     rm -f "$A/published"
     out="$(cd "$A" && env PATH="$TMP/bin:$PATH" ARCHIVE="$A" DISTRO="${DISTRO:-test}" \
-        ${OS_VERSION:+OS_VERSION="$OS_VERSION"} "$ADD" "$3" 2>&1)" || true
+        ${OS_VERSION:+OS_VERSION="$OS_VERSION"} ${CHANNEL:+CHANNEL="$CHANNEL"} "$ADD" "$3" 2>&1)" || true
     if [ "$1" = pass ] && [ -f "$A/published" ] \
         && { [ -z "${4:-}" ] || printf '%s' "$out" | grep -qF -- "$4"; }; then
         echo "    ok    $2"
@@ -200,7 +200,7 @@ pkg lib-gated products/a
 VER=0.9 pkg app public lib-gated
 VER=1.1 deb app public
 expect fail "a stale version depending on a gated package" app:public:1.1 \
-    "A stale .deb is still published: remove it from out/."
+    "A stale .deb is still published: remove it from out/stable/."
 
 # placed <description> <path>: check a source tarball was placed at <path> under the archive.
 placed() {
@@ -225,9 +225,9 @@ absent "a package that declares nothing gets no source" dist/public/sources/plai
 
 archive no-source
 SOURCE=1 pkg app public
-rm "$A/out/app_1.0.src.tar.gz"
+rm "$A/out/stable/app_1.0.src.tar.gz"
 expect fail "an open package declaring its source, without one" app:public:1.0 \
-    "no out/app_1.0.src.tar.gz"
+    "no out/stable/app_1.0.src.tar.gz"
 
 # passed_to_publisher <description> <argument>: check the publisher container was given <argument>.
 passed_to_publisher() {
@@ -254,5 +254,25 @@ archive unknown-distro
 deb app public
 OS_VERSION= DISTRO=nosuch expect fail "a distro with no known Ubuntu release" app:public:1.0 \
     "no Ubuntu release known for DISTRO=nosuch"
+
+archive inbox
+DIR="$A/out" SOURCE=1 deb app public
+CHANNEL=edge expect pass "a delivery for edge" app:public:1.0
+placed "moves from out/ into the edge channel's out/" out/edge/app_1.0_all.deb
+placed "with its source" out/edge/app_1.0.src.tar.gz
+passed_to_publisher "edge is published from its own out/" "$A/out/edge:/out"
+passed_to_publisher "and keeps the newest builds" "KEEP_VERSIONS=3"
+passed_to_publisher "into the edge channel" "CHANNEL=edge"
+
+archive stable-default
+deb app public
+expect pass "a delivery naming no channel" app:public:1.0
+passed_to_publisher "is published from the stable channel's out/" "$A/out/stable:/out"
+passed_to_publisher "into stable" "CHANNEL=stable"
+if grep -qF KEEP_VERSIONS "$A/docker-args"; then
+    echo "    FAIL  stable keeps every release"; fail=1
+else
+    echo "    ok    stable keeps every release"
+fi
 
 exit "$fail"

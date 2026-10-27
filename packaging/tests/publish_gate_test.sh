@@ -33,13 +33,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cp "$HERE/../archive/publish-gate" "$TMP/publish-gate"
-printf '#!/bin/sh\necho "DISTRO=$DISTRO SPECS=$*"\n' > "$TMP/add_and_publish.sh"
-chmod +x "$TMP/publish-gate" "$TMP/add_and_publish.sh"
+printf '#!/bin/sh\necho "DISTRO=$DISTRO CHANNEL=$CHANNEL SPECS=$*"\n' > "$TMP/add_and_publish.sh"
+printf '#!/bin/sh\necho "PROMOTE $1 -> $2 ROOTS=$ROOTS"\n' > "$TMP/promote.sh"
+chmod +x "$TMP/publish-gate" "$TMP/add_and_publish.sh" "$TMP/promote.sh"
 
-# request <distro> <spec>: the request as the publish workflow sends it.
+# request <distro> <spec> [channel]: the request as the publish workflow sends it.
 request() {
-    printf "EXPECTED_KEY_FPR='0000' DISTRO='%s' ~/duatic_devtools/packaging/archive/add_and_publish.sh '%s'" \
-        "$1" "$2"
+    printf "EXPECTED_KEY_FPR='0000' DISTRO='%s' CHANNEL='%s' ~/duatic_devtools/packaging/archive/add_and_publish.sh '%s'" \
+        "$1" "${3:-stable}" "$2"
 }
 
 fail=0
@@ -59,11 +60,11 @@ gate() {
     fi
 }
 
-gate pass "a fixed DISTRO ignores the distro the request names" "DISTRO=jazzy SPECS=app:public:1.0" \
+gate pass "a fixed DISTRO ignores the distro the request names" "DISTRO=jazzy CHANNEL= SPECS=app:public:1.0" \
     "$(request kilted app:public:1.0)" DISTRO=jazzy -- public
-gate pass "DISTROS lets the request pick a permitted distro" "DISTRO=kilted SPECS=app:public:1.0" \
+gate pass "DISTROS lets the request pick a permitted distro" "DISTRO=kilted CHANNEL= SPECS=app:public:1.0" \
     "$(request kilted app:public:1.0)" "DISTROS=humble jazzy kilted" -- public
-gate pass "DISTROS may be comma separated" "DISTRO=humble SPECS=app:public:1.0" \
+gate pass "DISTROS may be comma separated" "DISTRO=humble CHANNEL= SPECS=app:public:1.0" \
     "$(request humble app:public:1.0)" "DISTROS=humble,jazzy" -- public
 gate fail "a distro the key was not given" "this key may not publish for 'rolling'" \
     "$(request rolling app:public:1.0)" "DISTROS=humble jazzy" -- public
@@ -71,5 +72,18 @@ gate fail "DISTROS and a request naming no distro" "the request names no DISTRO"
     "~/duatic_devtools/packaging/archive/add_and_publish.sh 'app:public:1.0'" "DISTROS=jazzy" -- public
 gate fail "a root the key was not pinned to" "this key may not publish into 'products/a'" \
     "$(request jazzy app:products/a:1.0)" "DISTROS=jazzy" -- public
+
+gate pass "CHANNELS lets the request pick a permitted channel" "DISTRO=jazzy CHANNEL=edge SPECS=app:public:1.0" \
+    "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" "CHANNELS=stable edge" -- public
+gate fail "a channel the key was not given" "this key may not deliver into 'nightly'" \
+    "$(request jazzy app:public:1.0 nightly)" "DISTROS=jazzy" "CHANNELS=stable edge" -- public
+gate pass "without CHANNELS the request cannot pick the channel" "DISTRO=jazzy CHANNEL= SPECS=app:public:1.0" \
+    "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" -- public
+gate pass "a permitted promotion, in the key's roots" "PROMOTE edge -> nightly ROOTS=public" \
+    "PROMOTE='edge:nightly'" "PROMOTIONS=edge:nightly" -- public
+gate fail "a promotion the key was not given" "this key may not promote 'edge:stable'" \
+    "PROMOTE='edge:stable'" "PROMOTIONS=edge:nightly" -- public
+gate fail "no promotion without PROMOTIONS" "this key may not promote 'edge:nightly'" \
+    "PROMOTE='edge:nightly'" "DISTROS=jazzy" -- public
 
 exit "$fail"
