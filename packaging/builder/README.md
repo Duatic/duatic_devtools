@@ -29,6 +29,20 @@ for anything outside the public rosdistro index. Without it such a `<depend>` re
 and bloom does not treat that as an error. `rosdep/example.yaml` is the format;
 `workspace/gen_release_set.sh` generates the real ones for a whole release set.
 
+`ARCHIVE_URL` makes a published archive root an apt source for the build, for a package depending
+on packages already published there. Every dependency of the package it publishes is mapped for
+rosdep to its Debian name, and `mk-build-deps` installs build dependencies from it. It needs
+`ARCHIVE_KEYRING`, the archive's public key mounted into the container, which apt checks the
+archive's signature against. `ARCHIVE_CHANNELS` lists the channels read, by default `stable`; a
+build of main reads `edge stable`, so a dependency without a build of main comes from its release.
+
+```bash
+  -e ARCHIVE_URL=<archive root URL> \
+  -e ARCHIVE_KEYRING=/keys/duatic-archive.gpg \
+  -e ARCHIVE_CHANNELS='edge stable' \
+  -v <directory holding the key>:/keys:ro \
+```
+
 The image sets both the ROS distro and the architecture. Swap `ros:jazzy-ros-base` for
 `ros:kilted-ros-base` and the matching mapping to build for kilted; the distro ends up in the
 Debian package name, so the two never collide. The images are multi-arch, so an

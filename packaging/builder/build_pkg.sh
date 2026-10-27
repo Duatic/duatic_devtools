@@ -112,6 +112,40 @@ done < <(find . -name package.xml -not -path '*/.git/*' | sort)
 PKG_DIR="${PKG_DIR#./}"
 echo "--- $PKG found at ${PKG_DIR:-<repository root>}"
 
+# ---------------------------------------------------------------- archive dependencies
+# With ARCHIVE_URL, the archive is an apt source for the build, and each dependency of this package
+# it publishes is mapped for rosdep. ARCHIVE_KEYRING is its public key, ARCHIVE_CHANNELS the
+# channels read, by default stable. Optional.
+if [ -n "${ARCHIVE_URL:-}" ]; then
+    [ -f "${ARCHIVE_KEYRING:-}" ] \
+        || { echo "FATAL: ARCHIVE_URL needs ARCHIVE_KEYRING, the archive's public key" >&2; exit 1; }
+    suites=""
+    for channel in ${ARCHIVE_CHANNELS:-stable}; do suites="$suites $OS_VERSION-$channel"; done
+    echo "--- archive $ARCHIVE_URL,$suites"
+    install -D -m 644 "$ARCHIVE_KEYRING" /etc/apt/keyrings/duatic-archive.gpg
+    apt_archive=/tmp/archive-apt
+    mkdir -p "$apt_archive/sources" "$apt_archive/lists/partial" "$apt_archive/cache/archives/partial"
+    printf 'Types: deb\nURIs: %s\nSuites:%s\nComponents: main\nSigned-By: %s\n' \
+        "$ARCHIVE_URL" "$suites" /etc/apt/keyrings/duatic-archive.gpg \
+        > "$apt_archive/sources/duatic-archive.sources"
+    # The archive on its own, without the system's sources or installed packages, so the mapping
+    # names only what it publishes.
+    apt_alone=(-o Dir::Etc::SourceList=/dev/null -o Dir::Etc::SourceParts="$apt_archive/sources"
+        -o Dir::State::Lists="$apt_archive/lists" -o Dir::Cache="$apt_archive/cache"
+        -o Dir::State::status=/dev/null)
+    apt-get update -qq --error-on=any "${apt_alone[@]}"
+    apt-cache "${apt_alone[@]}" dumpavail > "$apt_archive/Packages"
+    /builder/archive_rosdep.sh "$SRC/${PKG_DIR:-.}/package.xml" "$ROS_DISTRO_ARG" "$OS_VERSION" \
+        "$apt_archive/Packages" > "$apt_archive/rosdep.yaml"
+    echo "    mapped from the archive:"
+    sed 's/^/      /' "$apt_archive/rosdep.yaml"
+    # After 10-local.list, before 20-default.list.
+    echo "yaml file://$apt_archive/rosdep.yaml" > /etc/ros/rosdep/sources.list.d/15-archive.list
+    rosdep update --rosdistro "$ROS_DISTRO_ARG"
+    cp "$apt_archive/sources/duatic-archive.sources" /etc/apt/sources.list.d/
+    apt-get update -qq --error-on=any
+fi
+
 echo "--- generating CHANGELOG.rst (written back into the repo)"
 if [ -f "$PKG_DIR/CHANGELOG.rst" ]; then
     echo "    $PKG_DIR/CHANGELOG.rst already present, leaving it alone"
