@@ -35,6 +35,8 @@ rosdep to its Debian name, and `mk-build-deps` installs build dependencies from 
 `ARCHIVE_KEYRING`, the archive's public key mounted into the container, which apt checks the
 archive's signature against. `ARCHIVE_CHANNELS` lists the channels read, by default `stable`; a
 build of main reads `edge stable`, so a dependency without a build of main comes from its release.
+A suite the archive does not publish yet is read as empty, and with none published the build goes
+ahead without the archive. Any other failure to reach it stops the build.
 
 ```bash
   -e ARCHIVE_URL=<archive root URL> \

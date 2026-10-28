@@ -115,6 +115,10 @@ jobs:
       - name: Archive dependencies map to their Debian names
         run: packaging/tests/archive_rosdep_test.sh
 
+      - name: Build against a signed archive with a suite missing
+        if: matrix.ros_distro == 'jazzy'
+        run: packaging/tests/archive_build_test.sh
+
       - name: Generate the rosdep mapping for ${{ matrix.ros_distro }}
         env:
           ROS_DISTROS: ${{ matrix.ros_distro }}

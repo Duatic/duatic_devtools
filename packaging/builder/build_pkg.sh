@@ -119,8 +119,32 @@ echo "--- $PKG found at ${PKG_DIR:-<repository root>}"
 if [ -n "${ARCHIVE_URL:-}" ]; then
     [ -f "${ARCHIVE_KEYRING:-}" ] \
         || { echo "FATAL: ARCHIVE_URL needs ARCHIVE_KEYRING, the archive's public key" >&2; exit 1; }
+    # A suite not published yet is read as empty; any other failure to reach one stops the build.
     suites=""
-    for channel in ${ARCHIVE_CHANNELS:-stable}; do suites="$suites $OS_VERSION-$channel"; done
+    for channel in ${ARCHIVE_CHANNELS:-stable}; do
+        suite="$OS_VERSION-$channel"
+        state="$(python3 - "${ARCHIVE_URL%/}/dists/$suite/InRelease" <<'PY'
+import sys, urllib.error, urllib.request
+url = sys.argv[1]
+try:
+    urllib.request.urlopen(url, timeout=60).close()
+    print("published")
+except urllib.error.HTTPError as e:
+    if e.code != 404:
+        sys.exit(f"FATAL: {url}: {e}")
+    print("missing")
+except urllib.error.URLError as e:
+    if not isinstance(e.reason, FileNotFoundError):
+        sys.exit(f"FATAL: {url}: {e.reason}")
+    print("missing")
+PY
+)"
+        if [ "$state" = published ]; then suites="$suites $suite"; else echo "--- $suite is not published yet"; fi
+    done
+fi
+if [ -n "${ARCHIVE_URL:-}" ] && [ -z "$suites" ]; then
+    echo "--- no suite of $ARCHIVE_URL is published yet, building without it"
+elif [ -n "${ARCHIVE_URL:-}" ]; then
     echo "--- archive $ARCHIVE_URL,$suites"
     install -D -m 644 "$ARCHIVE_KEYRING" /etc/apt/keyrings/duatic-archive.gpg
     apt_archive=/tmp/archive-apt
