@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.9.1 (2026-10-28)
+------------------
+* fix(builder): read an archive suite not published yet as empty (#30)
+
 1.9.0 (2026-10-27)
 ------------------
 * feat(builder): build against packages already published in the archive (#27)
