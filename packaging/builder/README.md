@@ -38,11 +38,20 @@ build of main reads `edge stable`, so a dependency without a build of main comes
 A suite the archive does not publish yet is read as empty, and with none published the build goes
 ahead without the archive. Any other failure to reach it stops the build.
 
+`ARCHIVE_URL` may list several roots, separated by spaces, for a package depending on packages
+published in more than one; all are signed by the same key. A root served only to a client
+certificate needs `ARCHIVE_CLIENT_CERT` and `ARCHIVE_CLIENT_KEY`, the certificate and its key in
+PEM, mounted into the container; apt presents them to every `https` root listed. The certificate
+is ECDSA P-256: apt's GnuTLS client does not send an RSA one to a TLS 1.3 server. Credentials in
+`ARCHIVE_URL` itself are refused, and a root that refuses the request stops the build.
+
 ```bash
-  -e ARCHIVE_URL=<archive root URL> \
+  -e ARCHIVE_URL='<archive root URL> <gated archive root URL>' \
   -e ARCHIVE_KEYRING=/keys/duatic-archive.gpg \
+  -e ARCHIVE_CLIENT_CERT=/keys/client.crt \
+  -e ARCHIVE_CLIENT_KEY=/keys/client.key \
   -e ARCHIVE_CHANNELS='edge stable' \
-  -v <directory holding the key>:/keys:ro \
+  -v <directory holding the key and the client certificate>:/keys:ro \
 ```
 
 The image sets both the ROS distro and the architecture. Swap `ros:jazzy-ros-base` for
