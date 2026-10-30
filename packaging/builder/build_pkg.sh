@@ -61,6 +61,7 @@ HOST_GID="${HOST_GID:-0}"
 hand_back_ownership() {
     [ "$HOST_UID" = "0" ] && return 0
     chown -R "$HOST_UID:$HOST_GID" "$SRC/${PKG_DIR:-$PKG}" 2>/dev/null || true
+    chown -R "$HOST_UID:$HOST_GID" "$SRC/.git/lfs" 2>/dev/null || true
     chown -R "$HOST_UID:$HOST_GID" "$OUT" 2>/dev/null || true
 }
 trap hand_back_ownership EXIT
@@ -75,11 +76,13 @@ echo "--- installing packaging tooling"
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
 python3-bloom python3-catkin-pkg \
-fakeroot dpkg-dev debhelper devscripts equivs apt-utils
+fakeroot dpkg-dev debhelper devscripts equivs apt-utils git-lfs
 
-for c in bloom-generate catkin_generate_changelog fakeroot dpkg-buildpackage mk-build-deps apt-ftparchive; do
+for c in bloom-generate catkin_generate_changelog fakeroot dpkg-buildpackage mk-build-deps apt-ftparchive git-lfs; do
     command -v "$c" >/dev/null || { echo "FATAL: missing $c" >&2; exit 1; }
 done
+# System-wide, so files stored in Git LFS compare as their pointers whatever the clone's own config.
+git lfs install --system --skip-repo >/dev/null
 
 # rosdep maps <depend> names to Debian names. Duatic names are not in the public index, so they
 # resolve to nothing unless ROSDEP_YAML points at a private mapping. Optional.
@@ -203,6 +206,20 @@ echo "--- copying to scratch build dir (keeps debian/ and .deb out of git)"
 rm -rf "$BUILD"; mkdir -p "$BUILD"
 cp -a "$SRC/$PKG_DIR" "$BUILD/$PKG"
 cd "$BUILD/$PKG"
+
+# A Git LFS pointer in place of a file means its content was never fetched.
+lfs_pointers=()
+while IFS= read -r -d '' f; do
+    first=""
+    IFS= read -r first < "$f" || true
+    if [ "$first" = "version https://git-lfs.github.com/spec/v1" ]; then lfs_pointers+=("${f#./}"); fi
+done < <(find . -path ./.git -prune -o -type f -size -1024c -print0)
+if [ ${#lfs_pointers[@]} -gt 0 ]; then
+    echo "FATAL: $PKG holds Git LFS pointers instead of their content:" >&2
+    printf '    %s\n' "${lfs_pointers[@]}" >&2
+    echo "  Fetch it with git lfs pull, or check the repository out with Git LFS enabled." >&2
+    exit 1
+fi
 
 # ---------------------------------------------------------------- 3. bloom
 echo "--- bloom-generate rosdebian"
