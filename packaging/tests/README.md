@@ -12,7 +12,7 @@ install_test.sh           install from the local flat repository
 open_roots_test.sh        open roots refuse dependencies on gated packages, and carry sources
 publish_gate_test.sh      publish-gate passes only permitted roots and distros
 archive_rosdep_test.sh    archive_rosdep.sh maps the dependencies an archive publishes
-archive_build_test.sh     build_pkg.sh against a signed archive with a suite missing, in docker
+archive_build_test.sh     build_pkg.sh against signed archives, one gated, with a suite missing, in docker
 ```
 
 ## The fixtures

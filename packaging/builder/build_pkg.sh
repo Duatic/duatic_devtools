@@ -113,45 +113,69 @@ PKG_DIR="${PKG_DIR#./}"
 echo "--- $PKG found at ${PKG_DIR:-<repository root>}"
 
 # ---------------------------------------------------------------- archive dependencies
-# With ARCHIVE_URL, the archive is an apt source for the build, and each dependency of this package
-# it publishes is mapped for rosdep. ARCHIVE_KEYRING is its public key, ARCHIVE_CHANNELS the
-# channels read, by default stable. Optional.
+# With ARCHIVE_URL, a space-separated list of archive roots, each is an apt source for the build,
+# and each dependency of this package they publish is mapped for rosdep. ARCHIVE_KEYRING is their
+# public key, ARCHIVE_CHANNELS the channels read, by default stable, and ARCHIVE_CLIENT_CERT with
+# ARCHIVE_CLIENT_KEY the client certificate presented to its https roots. Optional.
+apt_archive=/tmp/archive-apt
+client=/etc/apt/duatic-client
 if [ -n "${ARCHIVE_URL:-}" ]; then
     [ -f "${ARCHIVE_KEYRING:-}" ] \
         || { echo "FATAL: ARCHIVE_URL needs ARCHIVE_KEYRING, the archive's public key" >&2; exit 1; }
+    case "${ARCHIVE_CLIENT_CERT:+cert}${ARCHIVE_CLIENT_KEY:+key}" in
+        cert | key)
+            echo "FATAL: ARCHIVE_CLIENT_CERT and ARCHIVE_CLIENT_KEY are given together" >&2
+            exit 1
+            ;;
+        certkey)
+            [ -f "$ARCHIVE_CLIENT_CERT" ] \
+                || { echo "FATAL: ARCHIVE_CLIENT_CERT=$ARCHIVE_CLIENT_CERT does not exist" >&2; exit 1; }
+            [ -f "$ARCHIVE_CLIENT_KEY" ] \
+                || { echo "FATAL: ARCHIVE_CLIENT_KEY=$ARCHIVE_CLIENT_KEY does not exist" >&2; exit 1; }
+            # Owned by _apt, the user apt's https method runs as.
+            install -D -o _apt -m 600 "$ARCHIVE_CLIENT_CERT" "$client/client.crt"
+            install -D -o _apt -m 600 "$ARCHIVE_CLIENT_KEY" "$client/client.key"
+            ;;
+    esac
+    install -D -m 644 "$ARCHIVE_KEYRING" /etc/apt/keyrings/duatic-archive.gpg
+    mkdir -p "$apt_archive/sources" "$apt_archive/lists/partial" "$apt_archive/cache/archives/partial"
+    : > "$apt_archive/sources/duatic-archive.sources"
     # A suite not published yet is read as empty; any other failure to reach one stops the build.
-    suites=""
-    for channel in ${ARCHIVE_CHANNELS:-stable}; do
-        suite="$OS_VERSION-$channel"
-        state="$(python3 - "${ARCHIVE_URL%/}/dists/$suite/InRelease" <<'PY'
-import sys, urllib.error, urllib.request
-url = sys.argv[1]
-try:
-    urllib.request.urlopen(url, timeout=60).close()
-    print("published")
-except urllib.error.HTTPError as e:
-    if e.code != 404:
-        sys.exit(f"FATAL: {url}: {e}")
-    print("missing")
-except urllib.error.URLError as e:
-    if not isinstance(e.reason, FileNotFoundError):
-        sys.exit(f"FATAL: {url}: {e.reason}")
-    print("missing")
-PY
-)"
-        if [ "$state" = published ]; then suites="$suites $suite"; else echo "--- $suite is not published yet"; fi
+    for url in $ARCHIVE_URL; do
+        case "$url" in
+            *://*@*) echo "FATAL: ARCHIVE_URL holds credentials; give a client certificate instead" >&2; exit 1 ;;
+        esac
+        if [ -f "$client/client.key" ] && [ "${url%%://*}" = https ]; then
+            host="${url#https://}"
+            host="${host%%/*}"
+            host="${host%%:*}"
+            printf 'Acquire::https::%s::SslCert "%s";\nAcquire::https::%s::SslKey "%s";\n' \
+                "$host" "$client/client.crt" "$host" "$client/client.key" >> /etc/apt/apt.conf.d/90duatic-client
+        fi
+        suites=""
+        for channel in ${ARCHIVE_CHANNELS:-stable}; do
+            suite="$OS_VERSION-$channel"
+            probe="${url%/}/dists/$suite/InRelease"
+            if out="$(/usr/lib/apt/apt-helper download-file "$probe" /tmp/archive-probe 2>&1)"; then
+                suites="$suites $suite"
+            elif grep -qE '  404  | File not found - ' <<< "$out"; then
+                echo "--- $url: $suite is not published yet"
+            else
+                echo "FATAL: $probe: $(grep -m1 '^E: ' <<< "$out" | sed 's/^E: //')" >&2
+                exit 1
+            fi
+        done
+        rm -f /tmp/archive-probe
+        [ -n "$suites" ] || continue
+        echo "--- archive $url,$suites"
+        printf 'Types: deb\nURIs: %s\nSuites:%s\nComponents: main\nSigned-By: %s\n\n' \
+            "$url" "$suites" /etc/apt/keyrings/duatic-archive.gpg \
+            >> "$apt_archive/sources/duatic-archive.sources"
     done
 fi
-if [ -n "${ARCHIVE_URL:-}" ] && [ -z "$suites" ]; then
+if [ -n "${ARCHIVE_URL:-}" ] && [ ! -s "$apt_archive/sources/duatic-archive.sources" ]; then
     echo "--- no suite of $ARCHIVE_URL is published yet, building without it"
 elif [ -n "${ARCHIVE_URL:-}" ]; then
-    echo "--- archive $ARCHIVE_URL,$suites"
-    install -D -m 644 "$ARCHIVE_KEYRING" /etc/apt/keyrings/duatic-archive.gpg
-    apt_archive=/tmp/archive-apt
-    mkdir -p "$apt_archive/sources" "$apt_archive/lists/partial" "$apt_archive/cache/archives/partial"
-    printf 'Types: deb\nURIs: %s\nSuites:%s\nComponents: main\nSigned-By: %s\n' \
-        "$ARCHIVE_URL" "$suites" /etc/apt/keyrings/duatic-archive.gpg \
-        > "$apt_archive/sources/duatic-archive.sources"
     # The archive on its own, without the system's sources or installed packages, so the mapping
     # names only what it publishes.
     apt_alone=(-o Dir::Etc::SourceList=/dev/null -o Dir::Etc::SourceParts="$apt_archive/sources"
