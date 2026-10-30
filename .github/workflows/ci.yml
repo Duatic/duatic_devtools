@@ -119,6 +119,10 @@ jobs:
         if: matrix.ros_distro == 'jazzy'
         run: packaging/tests/archive_build_test.sh
 
+      - name: Build from a repository storing files in Git LFS
+        if: matrix.ros_distro == 'jazzy'
+        run: packaging/tests/lfs_build_test.sh
+
       - name: Generate the rosdep mapping for ${{ matrix.ros_distro }}
         env:
           ROS_DISTROS: ${{ matrix.ros_distro }}

@@ -73,6 +73,10 @@ A build from a tree with uncommitted changes is marked `-dirty`. If the source i
 checkout the field reads `unknown` rather than being omitted, so its absence means an old package
 rather than a clean build.
 
+Files stored in Git LFS are compared as their pointers, so a tree with its LFS content fetched is
+clean whether or not the clone's own config sets up the LFS filter. A package holding an LFS
+pointer in place of a file's content fails the build, since its content was never fetched.
+
 ## Source
 
 A package declaring `<duatic_publish_source>true</duatic_publish_source>` in its `<export>` also
