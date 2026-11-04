@@ -251,6 +251,35 @@ echo "--- bloom-generate rosdebian"
 bloom-generate rosdebian \
 --os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
 
+# debian/copyright carries the full license text: the nearest LICENSE or COPYING from the package
+# directory up to the repository root.
+license_file=""
+top="$(realpath "$SRC")"
+d="$(realpath "$SRC/${PKG_DIR:-.}")"
+while [ -z "$license_file" ]; do
+    for n in LICENSE LICENSE.txt LICENSE.md COPYING; do
+        if [ -f "$d/$n" ]; then license_file="$d/$n"; break; fi
+    done
+    if [ "$d" = "$top" ]; then break; fi
+    d="$(dirname "$d")"
+done
+if [ -n "$license_file" ]; then
+    echo "--- license text from ${license_file#"$top"/}"
+    python3 - "$license_file" <<'PYLIC'
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text(errors="replace")
+# Debian copyright continuation lines start with a space; an empty one is " .".
+body = "\n".join(f" {l.rstrip()}" if l.strip() else " ." for l in text.strip("\n").splitlines())
+c = pathlib.Path("debian/copyright")
+stub = " See repository for full license text"
+lines = c.read_text().splitlines()
+if stub in lines:
+    c.write_text("\n".join(body if l == stub else l for l in lines) + "\n")
+PYLIC
+else
+    echo "WARNING: no LICENSE or COPYING in ${PKG_DIR:-the repository root} or above it; debian/copyright names the license only" >&2
+fi
+
 # A build of main between releases, e.g. +git20261027153012.ab12cd3: it sorts after the release it
 # follows and before the next one.
 if [ -n "${DEB_VERSION_SUFFIX:-}" ]; then
