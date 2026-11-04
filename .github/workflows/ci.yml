@@ -123,6 +123,10 @@ jobs:
         if: matrix.ros_distro == 'jazzy'
         run: packaging/tests/lfs_build_test.sh
 
+      - name: Build with the license text in the copyright
+        if: matrix.ros_distro == 'jazzy'
+        run: packaging/tests/license_build_test.sh
+
       - name: Generate the rosdep mapping for ${{ matrix.ros_distro }}
         env:
           ROS_DISTROS: ${{ matrix.ros_distro }}

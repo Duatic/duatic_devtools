@@ -77,6 +77,12 @@ Files stored in Git LFS are compared as their pointers, so a tree with its LFS c
 clean whether or not the clone's own config sets up the LFS filter. A package holding an LFS
 pointer in place of a file's content fails the build, since its content was never fetched.
 
+## License
+
+`debian/copyright` carries the full text of the nearest `LICENSE`, `LICENSE.txt`, `LICENSE.md` or
+`COPYING`, looked up from the package directory to the repository root. Without one the build warns
+and the copyright names the license only.
+
 ## Source
 
 A package declaring `<duatic_publish_source>true</duatic_publish_source>` in its `<export>` also
