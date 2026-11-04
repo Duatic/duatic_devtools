@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.11.0 (2026-11-04)
+-------------------
+* feat(builder): carry the full license text in debian/copyright (#35)
+
 1.10.0 (2026-11-04)
 -------------------
 * feat(builder): read several archive roots, with a client certificate for gated ones (#33)
