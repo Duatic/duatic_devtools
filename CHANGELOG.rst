@@ -2,6 +2,11 @@
 Changelog
 ^^^^^^^^^
 
+1.10.0 (2026-11-04)
+-------------------
+* feat(builder): read several archive roots, with a client certificate for gated ones (#33)
+* fix(builder): refuse Git LFS pointers and keep LFS checkouts clean (#32)
+
 1.9.1 (2026-10-28)
 ------------------
 * fix(builder): read an archive suite not published yet as empty (#30)
