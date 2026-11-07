@@ -83,6 +83,22 @@ soem_vendor:
     "$TMP/package.xml" jazzy noble "$TMP/stable_Packages" "$TMP/edge_Packages"
 check "maps only the given distro's names" "{}" "$TMP/package.xml" jazzy noble "$TMP/kilted_Packages"
 check "an empty index maps nothing" "{}" "$TMP/package.xml" jazzy noble "$TMP/empty_Packages"
+printf 'Package: soem-vendor\nVersion: 0.5.0-0noble\n\nPackage: ros-jazzy-soem-vendor\nVersion: 0.4.2-0noble\n\nPackage: ros-jazzy-duatic-headers\nVersion: 1.0.0-1noble\n' \
+    > "$TMP/system_Packages"
+check "a system package maps to its own name, before its ROS name" \
+"duatic_headers:
+  ubuntu:
+    noble: [ros-jazzy-duatic-headers]
+soem_vendor:
+  ubuntu:
+    noble: [soem-vendor]" \
+    "$TMP/package.xml" jazzy noble "$TMP/system_Packages"
+check "without a distro only system packages map" \
+"soem_vendor:
+  ubuntu:
+    noble: [soem-vendor]" \
+    "$TMP/package.xml" "" noble "$TMP/system_Packages"
+check "without a distro a ROS-only archive maps nothing" "{}" "$TMP/package.xml" "" noble "$TMP/stable_Packages"
 check "needs an index" "exit 2 usage: archive_rosdep.sh <package.xml> <ros distro> <ubuntu release> <Packages file>..." \
     "$TMP/package.xml" jazzy noble
 

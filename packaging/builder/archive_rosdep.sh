@@ -23,7 +23,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Print a rosdep mapping for the dependencies of one package that an apt archive publishes: each
-# dependency whose ROS Debian name is in the given Packages indexes maps to that name.
+# dependency published as a system package (its name with - for _) maps to that name, and otherwise
+# one published under its ROS Debian name to that name. An empty <ros distro> maps system packages
+# only, for a system package, which may not depend on ROS.
 #
 # Usage:  archive_rosdep.sh <package.xml> <ros distro> <ubuntu release> <Packages file>...
 
@@ -45,8 +47,13 @@ for path in indexes:
     with open(path) as f:
         published.update(l.split(':', 1)[1].strip() for l in f if l.startswith('Package:'))
 
-mapped = {d: f"ros-{distro}-{d.replace('_', '-')}" for d in sorted(deps)}
-mapped = {d: deb for d, deb in mapped.items() if deb in published}
+mapped = {}
+for d in sorted(deps):
+    system, ros = d.replace('_', '-'), f"ros-{distro}-{d.replace('_', '-')}"
+    if system in published:
+        mapped[d] = system
+    elif distro and ros in published:
+        mapped[d] = ros
 if not mapped:
     print('{}')
 for d, deb in mapped.items():

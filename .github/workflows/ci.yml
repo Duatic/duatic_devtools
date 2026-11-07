@@ -127,6 +127,10 @@ jobs:
         if: matrix.ros_distro == 'jazzy'
         run: packaging/tests/license_build_test.sh
 
+      - name: Build a system package
+        if: matrix.ros_distro == 'jazzy'
+        run: packaging/tests/system_build_test.sh
+
       - name: Generate the rosdep mapping for ${{ matrix.ros_distro }}
         env:
           ROS_DISTROS: ${{ matrix.ros_distro }}
