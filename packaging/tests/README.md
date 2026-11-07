@@ -13,6 +13,7 @@ lfs_build_test.sh         build_pkg.sh from a repository storing files in Git LF
 license_build_test.sh     build_pkg.sh puts the repository's license text in the copyright, in docker
 open_roots_test.sh        open roots refuse dependencies on gated packages, and carry sources
 publish_gate_test.sh      publish-gate passes only permitted roots and distros
+lines_test.sh             product lines take patches, set releases and patches from stable
 archive_rosdep_test.sh    archive_rosdep.sh maps the dependencies an archive publishes
 archive_build_test.sh     build_pkg.sh against signed archives, one gated, with a suite missing, in docker
 ```
@@ -74,6 +75,14 @@ checks which roots and distros it lets through:
 
 ```bash
 docker run --rm -v "$PWD/..:/packaging:ro" ubuntu:24.04 /packaging/tests/publish_gate_test.sh
+```
+
+`lines_test.sh` runs `add_and_publish.sh` with docker stubbed by an index of what each channel would
+publish, and checks what a product line accepts, set releases, and patches reaching lines from
+stable:
+
+```bash
+docker run --rm -v "$PWD/..:/packaging:ro" ubuntu:24.04 /packaging/tests/lines_test.sh
 ```
 
 Checks that exercise a gateway, rather than the archive tree itself, live with the gateway. That

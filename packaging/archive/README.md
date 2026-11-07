@@ -35,6 +35,7 @@ carries a package built for another Ubuntu release.
 | `stable` | releases; every version stays | `add_and_publish.sh` with `CHANNEL=stable`, the default |
 | `edge` | builds of main; the newest `EDGE_KEEP` (default 3) of each package | `add_and_publish.sh` with `CHANNEL=edge` |
 | `nightly` | what `edge` published when it was last promoted | `promote.sh edge nightly`, nothing built |
+| a product line, e.g. `product1` | a set of releases users install from | set releases from `stable`, and patches of what it holds |
 
 Each channel keeps its own aptly repo per root and Ubuntu release, and its own deliveries:
 `add_and_publish.sh` moves a delivery from `out/` into `out/<channel>/` and publishes that channel
@@ -49,6 +50,25 @@ index in its root lists that version, so a build `nightly` still serves keeps it
 
 A publish or promotion holds `$ARCHIVE/.lock` while it runs, and another waits for it, up to
 `LOCK_WAIT` seconds (default 1200).
+
+## Product lines
+
+A channel whose name ends in a digit, such as `product1`, is a product line: one suite per Ubuntu
+release (`noble-product1`) holding a set of releases that were tested together. Users install
+from a line instead of `stable`, so `apt upgrade` brings them fixes and never a new feature or a
+breaking change. A product's next major gets a new line.
+
+- **A set release** copies named releases from `stable` into the line: `add_and_publish.sh` with
+  `CHANNEL=<line>` and `SET_RELEASE=1`, given the `<package>:<root>:<version>` of each release. Each
+  must already be in `stable`. This is how a line gets a package at all, and how it moves to a new
+  minor.
+- **Patches flow in by themselves:** a release published into `stable` is also published into every
+  line holding a version of the same package with the same `X.Y`, and none newer than it.
+- **A direct delivery** into a line (`CHANNEL=<line>`) is refused unless the line holds the same
+  `X.Y` of that package and nothing newer in it, and a line never takes a build of main.
+- Lines keep every version they were given, like `stable`; nothing prunes them.
+- A set release that is refused before publishing leaves the line as it was. One whose publish fails
+  keeps its copies, and the next publish of the line serves the whole set.
 
 ## Sources
 
@@ -135,10 +155,12 @@ The channel works the same way: `CHANNELS='stable edge'` lists the channels a ke
 and the request picks one with `CHANNEL=<channel>`. Without it, the line's `CHANNEL`, or `stable`, and
 a request naming another channel is refused.
 `PROMOTIONS='edge:nightly'` lets a key switch one channel to what another publishes, in its own
-roots, with a request of `PROMOTE=edge:nightly`; such a request delivers nothing:
+roots, with a request of `PROMOTE=edge:nightly`; such a request delivers nothing.
+`SETS='product1'` lists the product lines a key may make set releases into, with a request of
+`SET=product1`; the request's specs name the releases to copy from `stable`:
 
 ```
-command="DISTROS='humble jazzy kilted lyrical rolling' CHANNELS='stable edge' PROMOTIONS='edge:nightly' /usr/local/bin/publish-gate public",restrict ssh-ed25519 AAAA... ci
+command="DISTROS='humble jazzy kilted lyrical rolling' CHANNELS='stable edge' PROMOTIONS='edge:nightly' SETS='product1' /usr/local/bin/publish-gate public",restrict ssh-ed25519 AAAA... ci
 ```
 
 This is host state. It is not in this repository and is not reviewed when this repository is,

@@ -45,6 +45,11 @@
 # key's roots instead of delivering anything:
 #
 #   command="CHANNELS='stable edge' PROMOTIONS='edge:nightly' ... /usr/local/bin/publish-gate public",...
+#
+# SETS names the product lines a key may make set releases into, and a request of SET=<line> copies
+# the releases its specs name from stable into that line instead of delivering anything:
+#
+#   command="SETS='product1' ... /usr/local/bin/publish-gate public",...
 
 set -euo pipefail
 
@@ -105,7 +110,18 @@ if [ -n "$promote" ]; then
     ROOTS="${ALLOWED[*]}" exec "$(dirname "$(readlink -f "$0")")/promote.sh" "${promote%%:*}" "${promote#*:}"
 fi
 
-if [ -n "${CHANNELS:-}" ]; then
+set_line="$(word_value SET)"
+if [ -n "$set_line" ]; then
+    sets="${SETS:-}"
+    case " ${sets//,/ } " in
+        *" $set_line "*) ;;
+        *) echo "FATAL: this key may not make set releases into '$set_line'" >&2
+           echo "  permitted: ${SETS:-none}" >&2
+           exit 1 ;;
+    esac
+    export CHANNEL="$set_line" SET_RELEASE=1
+elif [ -n "${CHANNELS:-}" ]; then
+    unset SET_RELEASE
     channel="$(word_value CHANNEL)"
     [ -n "$channel" ] || { echo "FATAL: the request names no CHANNEL; this key may deliver into ${CHANNELS}" >&2; exit 1; }
     case " ${CHANNELS//,/ } " in
@@ -116,6 +132,7 @@ if [ -n "${CHANNELS:-}" ]; then
     esac
     export CHANNEL="$channel"
 else
+    unset SET_RELEASE
     # A request for another channel than the line's is refused, not delivered into the line's.
     channel="$(word_value CHANNEL)"
     if [ -n "$channel" ] && [ "$channel" != "${CHANNEL:-stable}" ]; then

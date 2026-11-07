@@ -33,7 +33,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cp "$HERE/../archive/publish-gate" "$TMP/publish-gate"
-printf '#!/bin/sh\necho "DISTRO=$DISTRO CHANNEL=$CHANNEL SPECS=$*"\n' > "$TMP/add_and_publish.sh"
+printf '#!/bin/sh\necho "DISTRO=$DISTRO CHANNEL=$CHANNEL SPECS=$* SET_RELEASE=${SET_RELEASE:-}"\n' > "$TMP/add_and_publish.sh"
 printf '#!/bin/sh\necho "PROMOTE $1 -> $2 ROOTS=$ROOTS"\n' > "$TMP/promote.sh"
 chmod +x "$TMP/publish-gate" "$TMP/add_and_publish.sh" "$TMP/promote.sh"
 
@@ -87,5 +87,16 @@ gate fail "a promotion the key was not given" "this key may not promote 'edge:st
     "PROMOTE='edge:stable'" "PROMOTIONS=edge:nightly" -- public
 gate fail "no promotion without PROMOTIONS" "this key may not promote 'edge:nightly'" \
     "PROMOTE='edge:nightly'" "DISTROS=jazzy" -- public
+
+gate pass "a permitted set release goes to the line" "DISTRO=jazzy CHANNEL=product1 SPECS=app:public:2.0.0 SET_RELEASE=1" \
+    "SET='product1' $(request jazzy app:public:2.0.0)" "DISTROS=jazzy" "SETS=product1" -- public
+gate fail "a set release into a line the key was not given" "this key may not make set releases into 'product2'" \
+    "SET='product2' $(request jazzy app:public:2.0.0)" "DISTROS=jazzy" "SETS=product1" -- public
+gate fail "no set release without SETS" "this key may not make set releases into 'product1'" \
+    "SET='product1' $(request jazzy app:public:2.0.0)" "DISTROS=jazzy" "CHANNELS=stable edge" -- public
+gate pass "SET_RELEASE on the key's line does not reach a delivery" "CHANNEL=stable SPECS=app:public:1.0 SET_RELEASE=" \
+    "$(request jazzy app:public:1.0)" "DISTROS=jazzy" "CHANNELS=stable" "SET_RELEASE=1" -- public
+gate fail "a set release still checks the root" "this key may not publish into 'products/a'" \
+    "SET='product1' $(request jazzy app:products/a:2.0.0)" "DISTROS=jazzy" "SETS=product1" -- public
 
 exit "$fail"

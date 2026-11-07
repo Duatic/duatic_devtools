@@ -83,3 +83,15 @@ prune_edge_sources() {
     done
     shopt -u nullglob
 }
+
+# is_line <channel>: a product line, such as product1, rather than stable, edge or nightly.
+is_line() { printf '%s' "$1" | grep -qE '^[a-z]+[0-9]+$'; }
+
+# series_of <version>: the X.Y of a Debian version, each cut at its first non-digit, with the epoch
+# kept and the revision dropped: 1:2.10.3-0noble is 1:2.10, 1.2~rc1 is 1.2.
+series_of() {
+    local v="$1" epoch=""
+    case "$v" in *:*) epoch="${v%%:*}:"; v="${v#*:}" ;; esac
+    v="${v%%-*}"
+    printf '%s%s' "$epoch" "$(printf '%s' "$v" | sed -E 's/^([0-9]+)(\.([0-9]+))?.*/\1.\3/')"
+}
