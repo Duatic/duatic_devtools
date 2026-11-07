@@ -113,6 +113,21 @@ pkg app public "lib-gated (>= 1.0)"
 expect fail "open package depending on a gated-only package" app:public:1.0 \
     "published only in gated roots: lib-gated in products/a"
 
+archive other-distro
+VER=1.0.0-0noble deb duatic-foo products/a
+printf '# root: products/a\nduatic-foo\n' > "$A/lists/products-a-jazzy.txt"
+VER=1.0.0-0noble deb ros-kilted-app public duatic-foo
+DISTRO=kilted expect fail "a dependency on a gated package listed under another distro of the release" \
+    ros-kilted-app:public:1.0.0-0noble "duatic-foo in products/a"
+
+archive other-release
+VER=1.0.0-0jammy deb duatic-foo public "lib-gated"
+VER=1.0.0-0noble deb duatic-foo public
+deb lib-gated products/a
+printf '# root: products/a\nlib-gated\n' > "$A/lists/products-a-jazzy.txt"
+printf '# root: public\nduatic-foo\n' > "$A/lists/public-jazzy.txt"
+DISTRO=jazzy expect pass "another Ubuntu release's build is not checked" duatic-foo:public:1.0.0-0noble
+
 archive alternative
 pkg lib-gated products/a
 pkg lib-open public

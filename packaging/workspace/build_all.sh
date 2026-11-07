@@ -52,7 +52,7 @@ ORDER="$(python3 - "$HERE" <<'PY'
 import sys, pathlib, xml.etree.ElementTree as ET
 here = pathlib.Path(sys.argv[1])
 wanted = set(here.joinpath('packages.txt').read_text().split())
-deps, where = {}, {}
+deps, where, kinds = {}, {}, {}
 for px in (here / 'src').rglob('package.xml'):
     if '.git' in px.parts: continue
     try: r = ET.parse(px).getroot()
@@ -66,6 +66,9 @@ for px in (here / 'src').rglob('package.xml'):
             if e.text and e.text.strip() in wanted: d.add(e.text.strip())
     deps[n] = d
     where[n] = px.parent.relative_to(here / 'src').parts[0]
+    kinds[n] = (r.findtext('export/duatic_package_kind') or '').strip() or 'ros'
+    if kinds[n] not in ('ros', 'system'):
+        sys.exit(f"{px}: duatic_package_kind is '{kinds[n]}', not ros or system")
 order, seen, marked = [], set(), set()
 def visit(n, chain=()):
     if n in seen: return
@@ -75,14 +78,17 @@ def visit(n, chain=()):
     for d in sorted(deps.get(n, ())): visit(d, chain + (n,))
     marked.discard(n); seen.add(n); order.append(n)
 for n in sorted(deps): visit(n)
-print(' '.join(f"{n}:{where[n]}" for n in order))
+print(' '.join(f"{n}:{where[n]}:{kinds[n]}" for n in order))
 PY
 )"
 [ -n "$ORDER" ] || { echo "FATAL: could not compute a build order" >&2; exit 1; }
 
 built=0; failed=0; failures=""
 for entry in $ORDER; do
-    pkg="${entry%%:*}"; repo="${entry##*:}"
+    pkg="${entry%%:*}"; rest="${entry#*:}"; repo="${rest%%:*}"; kind="${rest##*:}"
+    # A system package builds in plain Ubuntu, on the same release.
+    image="$BUILD_IMAGE"
+    [ "$kind" = system ] && image="ubuntu:$OS_VERSION"
     printf '=== %-42s (%s)\n' "$pkg" "$repo"
     if docker run --rm -i \
         -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
@@ -95,7 +101,7 @@ for entry in $ORDER; do
         -e LOCAL_REPO=/staging \
         -v "$STAGING:/staging" \
         -v "$OUT:/out" \
-        "$BUILD_IMAGE" \
+        "$image" \
         /builder/build_pkg.sh "$pkg" < /dev/null > "/tmp/build_$pkg.log" 2>&1; then
         # Into staging so the next package can build against it. .ddeb too, since a *.deb glob
         # misses debug packages. Fixtures stay out; they belong to packaging/tests.

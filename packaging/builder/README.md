@@ -60,6 +60,44 @@ Debian package name, so the two never collide. The images are multi-arch, so an
 amd64 host produces an amd64 package. For arm64, build on an arm64 machine or pass
 `--platform linux/arm64`.
 
+## System packages
+
+A package that needs no ROS, such as a plain C++ library, can be built into an ordinary Debian
+package instead: named as in `package.xml` with `-` for `_`, installed in `/usr`, and built once
+per Ubuntu release rather than once per ROS distro. Its name starts with `duatic_`, so it never
+takes a name Ubuntu, ROS or another archive uses. It declares, in the `<export>` of its
+`package.xml`:
+
+```xml
+<build_type>cmake</build_type>
+<duatic_package_kind>system</duatic_package_kind>
+```
+
+It is built in a plain Ubuntu image, which sets the Ubuntu release: the builder refuses an image
+with ROS in `/opt/ros`, one that is not Ubuntu, and an `OS_VERSION` naming another release than the
+image's. `ROS_DISTRO` is ignored. Every dependency must resolve without ROS: a dependency resolving
+to a ROS package, from the public index or a `ROSDEP_YAML` mapping, stops the build. bloom, rosdep and catkin_pkg are installed with pip at fixed
+versions, since Ubuntu does not package bloom.
+
+The package carries `Duatic-Package-Kind: system`, so a publisher can tell it from a ROS package by
+its control fields.
+
+`workspace/gen_release_set.sh` names a system package without the distro in its mapping and lists,
+and `workspace/build_all.sh` builds it in `ubuntu:<OS_VERSION>`.
+
+```bash
+docker run --rm -it \
+  -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+  -v <source repository>:/src \
+  -v "$PWD:/builder" \
+  -v "$PWD/out:/out" \
+  ubuntu:24.04 \
+  /builder/build_pkg.sh <package name>
+```
+
+A CMake project then finds it with `find_package()` and nothing sourced. A ROS package depending on
+it resolves the dependency to the system package when the archive publishes one under that name.
+
 ## Provenance
 
 Each built package carries the commit it came from, so a `.deb` in the field can be traced back to

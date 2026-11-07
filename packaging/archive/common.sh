@@ -33,6 +33,10 @@ ubuntu_for() {
         lyrical | rolling) echo resolute ;;
     esac
 }
+# release_of <version>: the Ubuntu release a Debian revision names, as noble in 1.0.0-0noble, or
+# nothing. A system package's name does not fix its release; its revision does.
+release_of() { printf '%s' "$1" | sed -nE 's/.*-[0-9]+([a-z]+)$/\1/p'; }
+
 # distros_on <ubuntu>: the known distros built on it, space separated.
 distros_on() {
     local d out=""
