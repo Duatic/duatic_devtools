@@ -35,7 +35,7 @@ carries a package built for another Ubuntu release.
 | `stable` | releases; every version stays | `add_and_publish.sh` with `CHANNEL=stable`, the default |
 | `edge` | builds of main; the newest `EDGE_KEEP` (default 3) of each package | `add_and_publish.sh` with `CHANNEL=edge` |
 | `nightly` | what `edge` published when it was last promoted | `promote.sh edge nightly`, nothing built |
-| a product line, e.g. `product1` | a set of releases customers install from | set releases from `stable`, and patches of what it holds |
+| a product line, e.g. `product1` | a set of releases users install from | set releases from `stable`, and patches of what it holds |
 
 Each channel keeps its own aptly repo per root and Ubuntu release, and its own deliveries:
 `add_and_publish.sh` moves a delivery from `out/` into `out/<channel>/` and publishes that channel
@@ -54,7 +54,7 @@ A publish or promotion holds `$ARCHIVE/.lock` while it runs, and another waits f
 ## Product lines
 
 A channel whose name ends in a digit, such as `product1`, is a product line: one suite per Ubuntu
-release (`noble-product1`) holding a set of releases that were tested together. Customers install
+release (`noble-product1`) holding a set of releases that were tested together. Users install
 from a line instead of `stable`, so `apt upgrade` brings them fixes and never a new feature or a
 breaking change. A product's next major gets a new line.
 
