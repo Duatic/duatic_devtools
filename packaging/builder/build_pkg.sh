@@ -430,6 +430,8 @@ for st in stanzas:
             add.append(f'XB-Duatic-Archive-Root: {root}')
         if publish_source == 'true':
             add.append('XB-Duatic-Publish-Source: true')
+        if kind == 'system':
+            add.append('XB-Duatic-Package-Kind: system')
         # Before Description, which continues over following indented lines and has to stay last.
         at = next((i for i, l in enumerate(lines) if l.startswith('Description:')), len(lines))
         lines[at:at] = add

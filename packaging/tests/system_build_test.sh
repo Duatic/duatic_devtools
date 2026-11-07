@@ -121,6 +121,7 @@ if [ -n "$deb" ]; then
     printf '%s' "$info" | grep -q ' ./usr/include/sys_fixture/answer.hpp$' && ok "installs in /usr" || bad "header not in /usr/include"
     printf '%s' "$info" | grep -q '/opt/' && bad "installs under /opt" || ok "nothing under /opt"
     printf '%s' "$info" | grep -q 'Duatic-Archive-Root: public' && ok "carries its archive root" || bad "no Duatic-Archive-Root"
+    printf '%s' "$info" | grep -q 'Duatic-Package-Kind: system' && ok "declares itself a system package" || bad "no Duatic-Package-Kind"
     printf '%s' "$info" | grep -q 'Duatic-Vcs-Commit: [0-9a-f]\{40\}$' && ok "a clean commit" || bad "no clean Duatic-Vcs-Commit"
     printf '%s' "$info" | grep -q 'index.ros.org' && bad "a ROS index homepage" || ok "no ROS index homepage"
     printf '%s' "$info" | grep -E '^ Depends:' | grep -q 'ros-' && bad "depends on a ROS package" || ok "depends on no ROS package"

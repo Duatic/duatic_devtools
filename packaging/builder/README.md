@@ -79,6 +79,9 @@ to a ROS package, from the public index or a `ROSDEP_YAML` mapping, stops the bu
 a package name Ubuntu already uses. bloom, rosdep and catkin_pkg are installed with pip at fixed
 versions, since Ubuntu does not package bloom.
 
+The package carries `Duatic-Package-Kind: system`, so a publisher can tell it from a ROS package by
+its control fields.
+
 `workspace/gen_release_set.sh` names a system package without the distro in its mapping and lists,
 and `workspace/build_all.sh` builds it in `ubuntu:<OS_VERSION>`.
 
