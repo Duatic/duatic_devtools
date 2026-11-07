@@ -313,6 +313,7 @@ for entry in "${ARCHIVES[@]}"; do
         for f in /out/*.src.tar.gz; do
             b="$(basename "$f" .src.tar.gz)"
             [ -n "${names["${b%%_*}"]:-}" ] || continue
+            case "$(codename_of "${b}_x")" in "" | "$OS_VERSION") ;; *) continue ;; esac
             [ -n "${keep_source["${b%%_*}|${b#*_}"]:-}" ] || { rm -f "$f"; echo "    - $(basename "$f")"; }
         done
         shopt -u nullglob

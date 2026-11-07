@@ -99,13 +99,12 @@ done
 # the same X.Y and Ubuntu release as <version>, or nothing.
 newest_held() {
     local f v newest="" release
-    release="$(printf '%s' "$3" | sed -nE 's/.*-[0-9]+([a-z]+)$/\1/p')"
+    release="$(release_of "$3")"
     for f in "out/$1/$2"_*.deb; do
         [ -f "$f" ] || continue
         v="$(basename "$f" .deb)"; v="${v#*_}"; v="${v%_*}"
         [ "$(series_of "$v")" = "$(series_of "$3")" ] || continue
-        # Only builds for the same Ubuntu release: a system package's name does not fix it.
-        [ "$(printf '%s' "$v" | sed -nE 's/.*-[0-9]+([a-z]+)$/\1/p')" = "$release" ] || continue
+        [ "$(release_of "$v")" = "$release" ] || continue
         if [ -z "$newest" ] || dpkg --compare-versions "$v" gt "$newest"; then newest="$v"; fi
     done
     printf '%s' "$newest"
@@ -186,9 +185,10 @@ for r in ${OPEN_ROOTS//,/ }; do
 done
 is_open() { local o; for o in "${OPEN[@]}"; do [ "$1" = "$o" ] && return 0; done; return 1; }
 
-# The package names in each root for this distro. Lists are only written once the check passes.
+# The package names in each root for every distro this suite publishes: a system package is listed
+# under one of them and depended on from all. Lists are only written once the check passes.
 declare -A PKGS_IN=()
-for f in lists/*-"${DISTRO}".txt; do
+for f in $(for d in $LIST_DISTROS; do printf '%s ' lists/*-"$d".txt; done); do
     [ -f "$f" ] || continue
     r="$(sed -n 's/^# root: //p' "$f" | head -1)"
     [ -n "$r" ] || { echo "FATAL: $f declares no root" >&2; exit 1; }
@@ -236,11 +236,16 @@ for spec in "$@"; do
     echo "    $pkg -> $root  ($list)"
 done
 
-# debs_of <name>: every .deb of <name> in this channel and in the builder output publish_archives.sh reads.
+# debs_of <name>: every .deb of <name> for this Ubuntu release in this channel and in the builder
+# output publish_archives.sh reads.
 debs_of() {
-    local d f
+    local d f v
     for d in "$OUT" ../builder/out; do
-        for f in "$d/$1"_*.deb; do [ -f "$f" ] && printf '%s\n' "$f"; done
+        for f in "$d/$1"_*.deb; do
+            [ -f "$f" ] || continue
+            v="$(basename "$f" .deb)"; v="${v#*_}"; v="${v%_*}"
+            case "$(release_of "$v")" in "" | "$OS_VERSION") printf '%s\n' "$f" ;; esac
+        done
     done
     return 0
 }
