@@ -11,6 +11,7 @@ probes/                   two hand-written packages that test dependency resolut
 install_test.sh           install from the local flat repository
 lfs_build_test.sh         build_pkg.sh from a repository storing files in Git LFS, in docker
 license_build_test.sh     build_pkg.sh puts the repository's license text in the copyright, in docker
+system_build_test.sh      build_pkg.sh builds a package that needs no ROS into /usr, in plain Ubuntu, in docker
 open_roots_test.sh        open roots refuse dependencies on gated packages, and carry sources
 publish_gate_test.sh      publish-gate passes only permitted roots and distros
 lines_test.sh             product lines take patches, set releases and patches from stable

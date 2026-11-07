@@ -48,10 +48,42 @@ case "$ROS_DISTRO_ARG" in
     rolling) os_version_default=resolute ;;
     *) os_version_default="" ;;
 esac
+# The package, found before any tooling is installed: its kind decides the tooling.
+PKG_DIR=""
+while IFS= read -r px; do
+    if grep -q "<name>[[:space:]]*$PKG[[:space:]]*</name>" "$SRC/$px" 2>/dev/null; then
+        PKG_DIR="$(dirname "$px")"; break
+    fi
+done < <(cd "$SRC" && find . -name package.xml -not -path '*/.git/*' | sort)
+[ -n "$PKG_DIR" ] || { echo "FATAL: no package.xml declaring <name>$PKG</name> under $SRC" >&2; exit 1; }
+PKG_DIR="${PKG_DIR#./}"
+# <duatic_package_kind>system</duatic_package_kind> marks a package that needs no ROS: it is built
+# in a plain Ubuntu image into an ordinary Debian package, named as in package.xml and installed in
+# /usr, once per Ubuntu release. Anything else is a ROS package, ros-<distro>-<name> in /opt/ros.
+KIND="$(sed -n '/<duatic_package_kind>/{s:.*<duatic_package_kind>[[:space:]]*\([^<[:space:]]*\)[[:space:]]*</duatic_package_kind>.*:\1:p;q}' "$SRC/$PKG_DIR/package.xml")"
+case "$KIND" in
+    "" | ros) KIND=ros ;;
+    system) ;;
+    *) echo "FATAL: <duatic_package_kind> is '$KIND', not system or ros" >&2; exit 1 ;;
+esac
+
+if [ "$KIND" = system ]; then
+    # The image's own release, and no ROS in it: a dependency on ROS then fails the build.
+    os_version_default="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
+    if [ -d /opt/ros ]; then
+        echo "FATAL: $PKG is a system package, built in a plain Ubuntu image; this one has ROS in /opt/ros" >&2
+        exit 1
+    fi
+fi
 OS_VERSION="${OS_VERSION:-$os_version_default}"
 if [ -z "$OS_VERSION" ]; then
     echo "no known Ubuntu base for ROS_DISTRO=$ROS_DISTRO_ARG; set OS_VERSION explicitly" >&2
     exit 1
+fi
+if [ "$KIND" = system ]; then
+    DEB_NAME="${PKG//_/-}"
+else
+    DEB_NAME="ros-${ROS_DISTRO_ARG}-${PKG//_/-}"
 fi
 
 # Runs as root against a bind mount, so writes are root-owned on the host. See hand_back_ownership.
@@ -67,16 +99,28 @@ hand_back_ownership() {
 trap hand_back_ownership EXIT
 
 echo "=============================================================="
-echo " packaging $PKG for ros-$ROS_DISTRO_ARG on ubuntu/$OS_VERSION"
+if [ "$KIND" = system ]; then
+    echo " packaging $PKG as a system package on ubuntu/$OS_VERSION"
+else
+    echo " packaging $PKG for ros-$ROS_DISTRO_ARG on ubuntu/$OS_VERSION"
+fi
 echo " arch: $(dpkg --print-architecture)"
 echo "=============================================================="
 
 # ---------------------------------------------------------------- tooling
 echo "--- installing packaging tooling"
 apt-get update -qq
-apt-get install -y -qq --no-install-recommends \
-python3-bloom python3-catkin-pkg \
-fakeroot dpkg-dev debhelper devscripts equivs apt-utils git-lfs
+if [ "$KIND" = system ]; then
+    # Ubuntu does not package bloom; the ROS apt repository would bring ROS sources into the image.
+    apt-get install -y -qq --no-install-recommends \
+    python3 python3-pip python3-setuptools git ca-certificates \
+    fakeroot dpkg-dev debhelper devscripts equivs apt-utils git-lfs
+    PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install -q --no-cache-dir bloom rosdep catkin_pkg
+else
+    apt-get install -y -qq --no-install-recommends \
+    python3-bloom python3-catkin-pkg \
+    fakeroot dpkg-dev debhelper devscripts equivs apt-utils git-lfs
+fi
 
 for c in bloom-generate catkin_generate_changelog fakeroot dpkg-buildpackage mk-build-deps apt-ftparchive git-lfs; do
     command -v "$c" >/dev/null || { echo "FATAL: missing $c" >&2; exit 1; }
@@ -96,7 +140,11 @@ if [ -n "${ROSDEP_YAML:-}" ]; then
 else
     echo "    NO private rosdep source: Duatic dependencies will not resolve"
 fi
-rosdep update --rosdistro "$ROS_DISTRO_ARG"
+# A system package resolves its keys for the Ubuntu release alone.
+rosdep_update() {
+    if [ "$KIND" = system ]; then rosdep update; else rosdep update --rosdistro "$ROS_DISTRO_ARG"; fi
+}
+rosdep_update
 
 # ---------------------------------------------------------------- 1. changelog
 # bloom requires CHANGELOG.rst. catkin_generate_changelog finds the VCS by .git, so it runs at
@@ -105,14 +153,6 @@ rosdep update --rosdistro "$ROS_DISTRO_ARG"
 cd "$SRC"
 # The container runs as root over a host-owned checkout, which git otherwise refuses to read.
 git config --global --add safe.directory "$SRC" 2>/dev/null || true
-PKG_DIR=""
-while IFS= read -r px; do
-    if grep -q "<name>[[:space:]]*$PKG[[:space:]]*</name>" "$px" 2>/dev/null; then
-        PKG_DIR="$(dirname "$px")"; break
-    fi
-done < <(find . -name package.xml -not -path '*/.git/*' | sort)
-[ -n "$PKG_DIR" ] || { echo "FATAL: no package.xml declaring <name>$PKG</name> under $SRC" >&2; exit 1; }
-PKG_DIR="${PKG_DIR#./}"
 echo "--- $PKG found at ${PKG_DIR:-<repository root>}"
 
 # ---------------------------------------------------------------- archive dependencies
@@ -186,13 +226,15 @@ elif [ -n "${ARCHIVE_URL:-}" ]; then
         -o Dir::State::status=/dev/null)
     apt-get update -qq --error-on=any "${apt_alone[@]}"
     apt-cache "${apt_alone[@]}" dumpavail > "$apt_archive/Packages"
-    /builder/archive_rosdep.sh "$SRC/${PKG_DIR:-.}/package.xml" "$ROS_DISTRO_ARG" "$OS_VERSION" \
+    rosdep_distro="$ROS_DISTRO_ARG"
+    [ "$KIND" = system ] && rosdep_distro=""
+    /builder/archive_rosdep.sh "$SRC/${PKG_DIR:-.}/package.xml" "$rosdep_distro" "$OS_VERSION" \
         "$apt_archive/Packages" > "$apt_archive/rosdep.yaml"
     echo "    mapped from the archive:"
     sed 's/^/      /' "$apt_archive/rosdep.yaml"
     # After 10-local.list, before 20-default.list.
     echo "yaml file://$apt_archive/rosdep.yaml" > /etc/ros/rosdep/sources.list.d/15-archive.list
-    rosdep update --rosdistro "$ROS_DISTRO_ARG"
+    rosdep_update
     cp "$apt_archive/sources/duatic-archive.sources" /etc/apt/sources.list.d/
     apt-get update -qq --error-on=any
 fi
@@ -246,10 +288,15 @@ if [ ${#lfs_pointers[@]} -gt 0 ]; then
 fi
 
 # ---------------------------------------------------------------- 3. bloom
-echo "--- bloom-generate rosdebian"
 # bloom-generate, not bloom-release: bloom-release targets the public rosdistro.
-bloom-generate rosdebian \
---os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
+if [ "$KIND" = system ]; then
+    echo "--- bloom-generate debian"
+    bloom-generate debian --os-name ubuntu --os-version "$OS_VERSION"
+else
+    echo "--- bloom-generate rosdebian"
+    bloom-generate rosdebian \
+    --os-name ubuntu --os-version "$OS_VERSION" --ros-distro "$ROS_DISTRO_ARG"
+fi
 
 # debian/copyright carries the full license text: the nearest LICENSE or COPYING from the package
 # directory up to the repository root.
@@ -303,9 +350,9 @@ case "$PUBLISH_SOURCE" in
     true | false | "") ;;
     *) echo "FATAL: <duatic_publish_source> is '$PUBLISH_SOURCE', not true or false" >&2; exit 1 ;;
 esac
-python3 - "$GIT_COMMIT" "$GIT_URL" "$PUBLISH_SOURCE" <<'PYCTL'
+python3 - "$GIT_COMMIT" "$GIT_URL" "$PUBLISH_SOURCE" "$KIND" <<'PYCTL'
 import sys, pathlib, xml.etree.ElementTree as ET
-commit, url, publish_source = sys.argv[1], sys.argv[2], sys.argv[3]
+commit, url, publish_source, kind = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 # The root the package declares, carried into the binary so the publish host can check where it
 # is being routed instead of trusting whoever asked. gen_release_set.sh reads the same field.
 root = ''
@@ -320,6 +367,9 @@ for st in stanzas:
     if not st.strip():
         continue
     lines = st.rstrip('\n').split('\n')
+    # bloom points a system package's Homepage at a ROS index page that does not exist.
+    if kind == 'system':
+        lines = [l for l in lines if not l.startswith('Homepage: https://index.ros.org/')]
     if st.startswith('Source:') and url != 'unknown':
         lines.append(f'Vcs-Git: {url}')
     elif st.startswith('Package:'):
@@ -364,11 +414,13 @@ echo "--- installing build dependencies"
 mk-build-deps --install --remove --tool='apt-get -y -qq --no-install-recommends' debian/control
 
 echo "--- building"
-# The ROS setup scripts read variables they do not set, so -u has to come off around them.
-set +u
-# shellcheck disable=SC1090
-source "/opt/ros/$ROS_DISTRO_ARG/setup.bash"
-set -u
+if [ "$KIND" = ros ]; then
+    # The ROS setup scripts read variables they do not set, so -u has to come off around them.
+    set +u
+    # shellcheck disable=SC1090
+    source "/opt/ros/$ROS_DISTRO_ARG/setup.bash"
+    set -u
+fi
 fakeroot debian/rules binary
 
 # ---------------------------------------------------------------- 5. source
@@ -425,7 +477,6 @@ fi
 # Only what this run produced. awk rather than head: head closes the pipe, and SIGPIPE under
 # pipefail fails the build.
 shopt -s nullglob
-DEB_NAME="ros-${ROS_DISTRO_ARG}-${PKG//_/-}"
 for d in "$OUT/$DEB_NAME"_*.deb "$OUT/$DEB_NAME"-dbgsym_*.ddeb; do
     echo
     echo "----- $(basename "$d") : metadata"
