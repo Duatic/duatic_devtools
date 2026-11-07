@@ -168,12 +168,27 @@ variant split 's|<duatic_package_kind>system</duatic_package_kind>|<duatic_packa
 refused "a kind tag over several lines" "is not on one line" split ubuntu:24.04
 
 variant comment 's|<duatic_package_kind>system</duatic_package_kind>|<!-- <duatic_package_kind>system</duatic_package_kind> -->|'
-refused "a kind tag in a comment" "outside the <export>" comment ubuntu:24.04
+refused "a kind tag in a comment" "remove the duatic_package_kind outside <export> or in a comment" comment ubuntu:24.04
+
+variant shadowed 's|<duatic_package_kind>system</duatic_package_kind>|<!-- <duatic_package_kind>ros</duatic_package_kind> -->\n    <duatic_package_kind>system</duatic_package_kind>|'
+refused "a commented ros tag before the real one" "reads as kind 'ros' here and 'system' in its <export>" \
+    shadowed ros:jazzy-ros-base
 
 variant clash 's|<name>sys_fixture</name>|<name>hello</name>|'
 log="$(docker run --rm -e ROS_DISTRO=jazzy -v "$HERE/../builder:/builder:ro" -v "$TMP/clash:/src" ubuntu:24.04 /builder/build_pkg.sh hello 2>&1 || true)"
 printf '%s' "$log" | grep -qF "already has a package named hello" && ok "a name Ubuntu already has" \
     || { bad "a name Ubuntu already has"; printf '%s\n' "$log" | tail -8; }
+
+# named <description> <name> <message>: the fixture renamed to <name> is refused, saying <message>.
+named() {
+    local log
+    variant "$2" "s|<name>sys_fixture</name>|<name>$2</name>|"
+    log="$(docker run --rm -e ROS_DISTRO=jazzy -v "$HERE/../builder:/builder:ro" -v "$TMP/$2:/src" \
+        ubuntu:24.04 /builder/build_pkg.sh "$2" 2>&1 || true)"
+    printf '%s' "$log" | grep -qF -- "$3" && ok "$1" || { bad "$1"; printf '%s\n' "$log" | tail -8; }
+}
+named "a name that is a public rosdep key" eigen "is already a rosdep key in the public index"
+named "a system package named ros-*" ros_thing "a system package is not named ros-*"
 
 echo
 [ "$fail" = 0 ] && echo "all passed" || echo "FAILURES"

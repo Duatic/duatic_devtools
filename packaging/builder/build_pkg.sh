@@ -100,6 +100,9 @@ if [ -z "$OS_VERSION" ]; then
 fi
 if [ "$KIND" = system ]; then
     DEB_NAME="${PKG//_/-}"
+    case "$DEB_NAME" in
+        ros-*) echo "FATAL: $PKG is a system package, and a system package is not named ros-*" >&2; exit 1 ;;
+    esac
 else
     DEB_NAME="ros-${ROS_DISTRO_ARG}-${PKG//_/-}"
 fi
@@ -156,6 +159,15 @@ git lfs install --system --skip-repo >/dev/null
 # resolve to nothing unless ROSDEP_YAML points at a private mapping. Optional.
 echo "--- rosdep update"
 [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init
+# Dependents resolve a system package by its name before the public index, so a name the public
+# index already resolves, such as fmt, would replace that dependency for every one of them.
+if [ "$KIND" = system ]; then
+    rosdep update >/dev/null
+    if rosdep resolve "$PKG" --os="ubuntu:$OS_VERSION" >/dev/null 2>&1; then
+        echo "FATAL: $PKG is already a rosdep key in the public index; rename it" >&2
+        exit 1
+    fi
+fi
 if [ -n "${ROSDEP_YAML:-}" ]; then
     [ -f "$ROSDEP_YAML" ] || { echo "FATAL: ROSDEP_YAML=$ROSDEP_YAML does not exist" >&2; exit 1; }
     echo "    private rosdep source: $ROSDEP_YAML"
@@ -170,13 +182,13 @@ rosdep_update() {
 }
 rosdep_update
 
-if [ "$KIND" = system ]; then
-    declared="$(python3 -c "import sys, xml.etree.ElementTree as E; print((E.parse(sys.argv[1]).getroot().findtext('export/duatic_package_kind') or '').strip())" "$SRC/$PKG_DIR/package.xml")"
-    [ "$declared" = system ] || {
-        echo "FATAL: duatic_package_kind outside the <export> of $PKG_DIR/package.xml, or in a comment" >&2
-        exit 1
-    }
-fi
+# What the workspace scripts read, which a comment or a tag outside <export> could make differ.
+declared="$(python3 -c "import sys, xml.etree.ElementTree as E; print((E.parse(sys.argv[1]).getroot().findtext('export/duatic_package_kind') or '').strip())" "$SRC/$PKG_DIR/package.xml")"
+[ "${declared:-ros}" = "$KIND" ] || {
+    echo "FATAL: $PKG_DIR/package.xml reads as kind '$KIND' here and '${declared:-ros}' in its <export>;" >&2
+    echo "  remove the duatic_package_kind outside <export> or in a comment" >&2
+    exit 1
+}
 
 # ---------------------------------------------------------------- 1. changelog
 # bloom requires CHANGELOG.rst. catkin_generate_changelog finds the VCS by .git, so it runs at
@@ -325,7 +337,7 @@ if [ "$KIND" = system ]; then
     echo "--- bloom-generate debian"
     bloom-generate debian --os-name ubuntu --os-version "$OS_VERSION"
     # Whatever rosdep resolved: a system package that would build or run against ROS is refused.
-    if grep -E '^(Depends|Build-Depends|Pre-Depends):' debian/control | grep -q 'ros-'; then
+    if grep -qE '^(Depends|Build-Depends|Pre-Depends):(.*[ ,|])?ros-' debian/control; then
         echo "FATAL: $PKG is a system package, but it depends on ROS:" >&2
         grep -E '^(Depends|Build-Depends|Pre-Depends):' debian/control >&2
         exit 1

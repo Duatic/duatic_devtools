@@ -67,6 +67,8 @@ for px in (here / 'src').rglob('package.xml'):
     deps[n] = d
     where[n] = px.parent.relative_to(here / 'src').parts[0]
     kinds[n] = (r.findtext('export/duatic_package_kind') or '').strip() or 'ros'
+    if kinds[n] not in ('ros', 'system'):
+        sys.exit(f"{px}: duatic_package_kind is '{kinds[n]}', not ros or system")
 order, seen, marked = [], set(), set()
 def visit(n, chain=()):
     if n in seen: return
