@@ -51,7 +51,7 @@ esac
 # The package, found before any tooling is installed: its kind decides the tooling.
 PKG_DIR=""
 while IFS= read -r px; do
-    if grep -q "<name>[[:space:]]*$PKG[[:space:]]*</name>" "$SRC/$px" 2>/dev/null; then
+    if grep -q "<name>[[:space:]]*${PKG}[[:space:]]*</name>" "$SRC/$px" 2>/dev/null; then
         PKG_DIR="$(dirname "$px")"; break
     fi
 done < <(cd "$SRC" && find . -name package.xml -not -path '*/.git/*' | sort)
@@ -99,9 +99,11 @@ if [ -z "$OS_VERSION" ]; then
     exit 1
 fi
 if [ "$KIND" = system ]; then
+    # The prefix keeps a system package from taking a name Ubuntu, ROS or another archive uses.
     DEB_NAME="${PKG//_/-}"
-    case "$DEB_NAME" in
-        ros-*) echo "FATAL: $PKG is a system package, and a system package is not named ros-*" >&2; exit 1 ;;
+    case "$PKG" in
+        duatic_?*) ;;
+        *) echo "FATAL: $PKG is a system package, and a system package is named duatic_*" >&2; exit 1 ;;
     esac
 else
     DEB_NAME="ros-${ROS_DISTRO_ARG}-${PKG//_/-}"
@@ -138,11 +140,6 @@ if [ "$KIND" = system ]; then
     fakeroot dpkg-dev debhelper devscripts equivs apt-utils git-lfs
     PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install -q --no-cache-dir \
         bloom==0.14.4 rosdep==0.27.0 catkin_pkg==1.1.1
-    # A name Ubuntu already uses would replace or conflict with its package on every machine.
-    if apt-cache show "$DEB_NAME" >/dev/null 2>&1; then
-        echo "FATAL: Ubuntu $OS_VERSION already has a package named $DEB_NAME; rename $PKG" >&2
-        exit 1
-    fi
 else
     apt-get install -y -qq --no-install-recommends \
     python3-bloom python3-catkin-pkg \
@@ -159,15 +156,6 @@ git lfs install --system --skip-repo >/dev/null
 # resolve to nothing unless ROSDEP_YAML points at a private mapping. Optional.
 echo "--- rosdep update"
 [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init
-# Dependents resolve a system package by its name before the public index, so a name the public
-# index already resolves, such as fmt, would replace that dependency for every one of them.
-if [ "$KIND" = system ]; then
-    rosdep update >/dev/null
-    if rosdep resolve "$PKG" --os="ubuntu:$OS_VERSION" >/dev/null 2>&1; then
-        echo "FATAL: $PKG is already a rosdep key in the public index; rename it" >&2
-        exit 1
-    fi
-fi
 if [ -n "${ROSDEP_YAML:-}" ]; then
     [ -f "$ROSDEP_YAML" ] || { echo "FATAL: ROSDEP_YAML=$ROSDEP_YAML does not exist" >&2; exit 1; }
     echo "    private rosdep source: $ROSDEP_YAML"

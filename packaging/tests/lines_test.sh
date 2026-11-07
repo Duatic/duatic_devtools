@@ -133,6 +133,13 @@ deb 2.0.1 out
 CHANNEL=product1 run pass "a line takes a patch of the X.Y it holds" app:public:2.0.1 \
     "ok    app 2.0.1 in dist/public/dists/noble-product1"
 
+archive line-other-release
+deb 2.0.0-0noble out/product1
+deb 2.0.1-0resolute out/product1
+deb 2.0.1-0noble out
+CHANNEL=product1 run pass "a line compares a patch only with builds for its own Ubuntu release" app:public:2.0.1-0noble \
+    "ok    app 2.0.1-0noble in dist/public/dists/noble-product1"
+
 archive line-minor
 deb 2.0.0 out/product1
 deb 2.1.0 out

@@ -38,12 +38,12 @@ TMP="$(mktemp -d)"
 trap 'docker run --rm -v "$TMP:/t" ubuntu:24.04 sh -c "rm -rf /t/*" 2>/dev/null; rm -rf "$TMP"' EXIT
 
 # The fixture: one header, one library, a CMake package config.
-R="$TMP/repo/sys_fixture"
-mkdir -p "$R/include/sys_fixture" "$R/src"
+R="$TMP/repo/duatic_sys_fixture"
+mkdir -p "$R/include/duatic_sys_fixture" "$R/src"
 cat > "$R/package.xml" <<'XML'
 <?xml version="1.0"?>
 <package format="3">
-  <name>sys_fixture</name>
+  <name>duatic_sys_fixture</name>
   <version>1.2.3</version>
   <description>A library that needs no ROS</description>
   <maintainer email="test@example.invalid">test</maintainer>
@@ -56,19 +56,19 @@ cat > "$R/package.xml" <<'XML'
   </export>
 </package>
 XML
-printf 'int sys_fixture_answer();\n' > "$R/include/sys_fixture/answer.hpp"
-printf '#include "sys_fixture/answer.hpp"\nint sys_fixture_answer() { return 42; }\n' > "$R/src/answer.cpp"
+printf 'int duatic_sys_fixture_answer();\n' > "$R/include/duatic_sys_fixture/answer.hpp"
+printf '#include "duatic_sys_fixture/answer.hpp"\nint duatic_sys_fixture_answer() { return 42; }\n' > "$R/src/answer.cpp"
 cat > "$R/CMakeLists.txt" <<'CMAKE'
 cmake_minimum_required(VERSION 3.22)
-project(sys_fixture CXX)
+project(duatic_sys_fixture CXX)
 include(GNUInstallDirs)
-add_library(sys_fixture SHARED src/answer.cpp)
-target_include_directories(sys_fixture PUBLIC
+add_library(duatic_sys_fixture SHARED src/answer.cpp)
+target_include_directories(duatic_sys_fixture PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 install(DIRECTORY include/ DESTINATION include)
-install(TARGETS sys_fixture EXPORT sys_fixtureTargets LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(EXPORT sys_fixtureTargets FILE sys_fixtureConfig.cmake NAMESPACE sys_fixture::
-  DESTINATION share/sys_fixture/cmake)
+install(TARGETS duatic_sys_fixture EXPORT duatic_sys_fixtureTargets LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(EXPORT duatic_sys_fixtureTargets FILE duatic_sys_fixtureConfig.cmake NAMESPACE duatic_sys_fixture::
+  DESTINATION share/duatic_sys_fixture/cmake)
 CMAKE
 printf 'BSD-3-Clause test licence\n' > "$TMP/repo/LICENSE"
 printf 'Changelog\n=========\n\n1.2.3 (2026-11-07)\n------------------\n* First release\n' > "$R/CHANGELOG.rst"
@@ -83,21 +83,21 @@ bad() { echo "    FAIL  $1"; fail=1; }
 # variant <name> <sed expression on package.xml> [remove-changelog]: a commit of the fixture with
 # its package.xml changed, cloned to $TMP/<name>.
 variant() {
-    rm -rf "$TMP/$1"
+    rm -rf "${TMP:?}/$1"
     git clone -q "$TMP/repo" "$TMP/$1"
-    [ -z "$2" ] || sed -i "$2" "$TMP/$1/sys_fixture/package.xml"
-    [ -z "${3:-}" ] || rm "$TMP/$1/sys_fixture/CHANGELOG.rst"
+    [ -z "$2" ] || sed -i "$2" "$TMP/$1/duatic_sys_fixture/package.xml"
+    [ -z "${3:-}" ] || rm "$TMP/$1/duatic_sys_fixture/CHANGELOG.rst"
     git -C "$TMP/$1" -c user.name=t -c user.email=t@example.invalid commit -q -am "$1" --allow-empty
 }
 
-# build <repo> <image> [docker args...]: build_pkg.sh for sys_fixture from $TMP/<repo> into
+# build <repo> <image> [docker args...]: build_pkg.sh for duatic_sys_fixture from $TMP/<repo> into
 # $TMP/<repo>-out, as callers run it; prints the log.
 build() {
     local repo="$1" image="$2"; shift 2
     mkdir -p "$TMP/$repo-out"
     docker run --rm -e ROS_DISTRO=jazzy -e OS_VERSION=noble "$@" \
         -v "$HERE/../builder:/builder:ro" -v "$TMP/$repo:/src" -v "$TMP/$repo-out:/out" \
-        "$image" /builder/build_pkg.sh sys_fixture 2>&1 || true
+        "$image" /builder/build_pkg.sh duatic_sys_fixture 2>&1 || true
 }
 
 # refused <description> <message> <repo> <image> [docker args...]: no .deb, and the log says why.
@@ -114,11 +114,11 @@ refused() {
 echo "--- building in ubuntu:24.04, with ROS_DISTRO=jazzy and OS_VERSION=noble set"
 variant plain ""
 log="$(build plain ubuntu:24.04)"
-deb="$(ls "$TMP"/plain-out/sys-fixture_*.deb 2>/dev/null | head -n1 || true)"
-if [ -n "$deb" ]; then ok "named sys-fixture, without a ROS prefix"; else bad "no sys-fixture .deb"; printf '%s\n' "$log" | tail -25; fi
+deb="$(ls "$TMP"/plain-out/duatic-sys-fixture_*.deb 2>/dev/null | head -n1 || true)"
+if [ -n "$deb" ]; then ok "named duatic-sys-fixture, without a ROS prefix"; else bad "no duatic-sys-fixture .deb"; printf '%s\n' "$log" | tail -25; fi
 if [ -n "$deb" ]; then
     info="$(docker run --rm -v "$TMP/plain-out:/out:ro" ubuntu:24.04 sh -c "dpkg-deb -I /out/$(basename "$deb"); dpkg-deb -c /out/$(basename "$deb")")"
-    printf '%s' "$info" | grep -q ' ./usr/include/sys_fixture/answer.hpp$' && ok "installs in /usr" || bad "header not in /usr/include"
+    printf '%s' "$info" | grep -q ' ./usr/include/duatic_sys_fixture/answer.hpp$' && ok "installs in /usr" || bad "header not in /usr/include"
     printf '%s' "$info" | grep -q '/opt/' && bad "installs under /opt" || ok "nothing under /opt"
     printf '%s' "$info" | grep -q 'Duatic-Archive-Root: public' && ok "carries its archive root" || bad "no Duatic-Archive-Root"
     printf '%s' "$info" | grep -q 'Duatic-Package-Kind: system' && ok "declares itself a system package" || bad "no Duatic-Package-Kind"
@@ -127,10 +127,10 @@ if [ -n "$deb" ]; then
     printf '%s' "$info" | grep -E '^ Depends:' | grep -q 'ros-' && bad "depends on a ROS package" || ok "depends on no ROS package"
     if docker run --rm -v "$TMP/plain-out:/out:ro" ubuntu:24.04 bash -c '
         set -e; apt-get update -qq >/dev/null; apt-get install -y -qq cmake g++ >/dev/null 2>&1
-        apt-get install -y -qq /out/sys-fixture_*.deb >/dev/null 2>&1
+        apt-get install -y -qq /out/duatic-sys-fixture_*.deb >/dev/null 2>&1
         mkdir /c && cd /c
-        printf "cmake_minimum_required(VERSION 3.22)\nproject(c CXX)\nfind_package(sys_fixture REQUIRED)\nadd_executable(c c.cpp)\ntarget_link_libraries(c sys_fixture::sys_fixture)\n" > CMakeLists.txt
-        printf "#include <sys_fixture/answer.hpp>\nint main() { return sys_fixture_answer() == 42 ? 0 : 1; }\n" > c.cpp
+        printf "cmake_minimum_required(VERSION 3.22)\nproject(c CXX)\nfind_package(duatic_sys_fixture REQUIRED)\nadd_executable(c c.cpp)\ntarget_link_libraries(c duatic_sys_fixture::duatic_sys_fixture)\n" > CMakeLists.txt
+        printf "#include <duatic_sys_fixture/answer.hpp>\nint main() { return duatic_sys_fixture_answer() == 42 ? 0 : 1; }\n" > c.cpp
         cmake -S . -B b >/dev/null && cmake --build b >/dev/null && ./b/c' >/dev/null 2>&1; then
         ok "a plain CMake project finds and links it"
     else
@@ -141,7 +141,7 @@ fi
 echo "--- generating its changelog"
 variant nochangelog "" remove-changelog
 log="$(build nochangelog ubuntu:24.04)"
-ls "$TMP"/nochangelog-out/sys-fixture_*.deb >/dev/null 2>&1 && ok "builds with a generated changelog" \
+ls "$TMP"/nochangelog-out/duatic-sys-fixture_*.deb >/dev/null 2>&1 && ok "builds with a generated changelog" \
     || { bad "no build with a generated changelog"; printf '%s\n' "$log" | tail -12; }
 
 echo "--- refusals"
@@ -175,21 +175,17 @@ variant shadowed 's|<duatic_package_kind>system</duatic_package_kind>|<!-- <duat
 refused "a commented ros tag before the real one" "reads as kind 'ros' here and 'system' in its <export>" \
     shadowed ros:jazzy-ros-base
 
-variant clash 's|<name>sys_fixture</name>|<name>hello</name>|'
-log="$(docker run --rm -e ROS_DISTRO=jazzy -v "$HERE/../builder:/builder:ro" -v "$TMP/clash:/src" ubuntu:24.04 /builder/build_pkg.sh hello 2>&1 || true)"
-printf '%s' "$log" | grep -qF "already has a package named hello" && ok "a name Ubuntu already has" \
-    || { bad "a name Ubuntu already has"; printf '%s\n' "$log" | tail -8; }
-
 # named <description> <name> <message>: the fixture renamed to <name> is refused, saying <message>.
 named() {
     local log
-    variant "$2" "s|<name>sys_fixture</name>|<name>$2</name>|"
+    variant "$2" "s|<name>duatic_sys_fixture</name>|<name>$2</name>|"
     log="$(docker run --rm -e ROS_DISTRO=jazzy -v "$HERE/../builder:/builder:ro" -v "$TMP/$2:/src" \
         ubuntu:24.04 /builder/build_pkg.sh "$2" 2>&1 || true)"
     printf '%s' "$log" | grep -qF -- "$3" && ok "$1" || { bad "$1"; printf '%s\n' "$log" | tail -8; }
 }
-named "a name that is a public rosdep key" eigen "is already a rosdep key in the public index"
-named "a system package named ros-*" ros_thing "a system package is not named ros-*"
+named "a name Ubuntu already has" hello "a system package is named duatic_*"
+named "a system package named ros-*" ros_thing "a system package is named duatic_*"
+named "the bare prefix" duatic_ "a system package is named duatic_*"
 
 echo
 [ "$fail" = 0 ] && echo "all passed" || echo "FAILURES"

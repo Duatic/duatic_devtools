@@ -64,7 +64,8 @@ amd64 host produces an amd64 package. For arm64, build on an arm64 machine or pa
 
 A package that needs no ROS, such as a plain C++ library, can be built into an ordinary Debian
 package instead: named as in `package.xml` with `-` for `_`, installed in `/usr`, and built once
-per Ubuntu release rather than once per ROS distro. It declares, in the `<export>` of its
+per Ubuntu release rather than once per ROS distro. Its name starts with `duatic_`, so it never
+takes a name Ubuntu, ROS or another archive uses. It declares, in the `<export>` of its
 `package.xml`:
 
 ```xml
@@ -75,8 +76,7 @@ per Ubuntu release rather than once per ROS distro. It declares, in the `<export
 It is built in a plain Ubuntu image, which sets the Ubuntu release: the builder refuses an image
 with ROS in `/opt/ros`, one that is not Ubuntu, and an `OS_VERSION` naming another release than the
 image's. `ROS_DISTRO` is ignored. Every dependency must resolve without ROS: a dependency resolving
-to a ROS package, from the public index or a `ROSDEP_YAML` mapping, stops the build, and so does
-a package name Ubuntu already uses. bloom, rosdep and catkin_pkg are installed with pip at fixed
+to a ROS package, from the public index or a `ROSDEP_YAML` mapping, stops the build. bloom, rosdep and catkin_pkg are installed with pip at fixed
 versions, since Ubuntu does not package bloom.
 
 The package carries `Duatic-Package-Kind: system`, so a publisher can tell it from a ROS package by

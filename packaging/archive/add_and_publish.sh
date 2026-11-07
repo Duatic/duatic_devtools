@@ -96,13 +96,16 @@ for spec in "$@"; do
 done
 
 # newest_held <line> <package> <version>: the newest version of the package the line holds with
-# the same X.Y as <version>, or nothing.
+# the same X.Y and Ubuntu release as <version>, or nothing.
 newest_held() {
-    local f v newest=""
+    local f v newest="" release
+    release="$(printf '%s' "$3" | sed -nE 's/.*-[0-9]+([a-z]+)$/\1/p')"
     for f in "out/$1/$2"_*.deb; do
         [ -f "$f" ] || continue
         v="$(basename "$f" .deb)"; v="${v#*_}"; v="${v%_*}"
         [ "$(series_of "$v")" = "$(series_of "$3")" ] || continue
+        # Only builds for the same Ubuntu release: a system package's name does not fix it.
+        [ "$(printf '%s' "$v" | sed -nE 's/.*-[0-9]+([a-z]+)$/\1/p')" = "$release" ] || continue
         if [ -z "$newest" ] || dpkg --compare-versions "$v" gt "$newest"; then newest="$v"; fi
     done
     printf '%s' "$newest"
