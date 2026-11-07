@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.13.0 (2026-11-07)
+-------------------
+* feat(packaging): system packages for code that needs no ROS (#39)
+
 1.12.0 (2026-11-07)
 -------------------
 * feat(archive): product lines (#37)
