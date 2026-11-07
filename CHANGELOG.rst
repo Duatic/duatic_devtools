@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.12.0 (2026-11-07)
+-------------------
+* feat(archive): product lines (#37)
+
 1.11.0 (2026-11-04)
 -------------------
 * feat(builder): carry the full license text in debian/copyright (#35)
