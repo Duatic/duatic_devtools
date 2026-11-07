@@ -31,6 +31,12 @@
 # and that channel's suites are published from there alone. CHANNEL is stable for releases and
 # edge for builds of main; edge keeps the newest EDGE_KEEP builds of each package (default 3).
 #
+# A channel ending in a digit, such as product1, is a product line: a set of releases customers
+# install from. It takes only patch releases of what it holds: a delivery whose X.Y the line holds
+# no version of is refused. New versions enter a line with SET_RELEASE=1, which copies the named
+# releases from stable instead of taking a delivery. A stable delivery is also published into every
+# line holding a version of the same package with the same X.Y.
+#
 # Usage:  add_and_publish.sh <package>:<root>:<version> [...]
 
 set -euo pipefail
@@ -47,11 +53,16 @@ OPEN_ROOTS="${OPEN_ROOTS:-}"
 # The routing lists are per distro, and appending to the wrong one publishes a package under a
 # distro it was not built for. Named rather than defaulted, because a default would be a guess.
 [ -n "${DISTRO:-}" ] || { echo "FATAL: DISTRO is not set" >&2; exit 1; }
-printf '%s' "$CHANNEL" | grep -qE '^[a-z]+$' || { echo "FATAL: invalid CHANNEL '$CHANNEL'" >&2; exit 1; }
+printf '%s' "$CHANNEL" | grep -qE '^[a-z][a-z0-9]*$' || { echo "FATAL: invalid CHANNEL '$CHANNEL'" >&2; exit 1; }
+SET_RELEASE="${SET_RELEASE:-0}"
+case "$SET_RELEASE" in 0|1) ;; *) echo "FATAL: SET_RELEASE is '$SET_RELEASE', not 0 or 1" >&2; exit 1 ;; esac
 
 # shellcheck source=common.sh
 . "$(dirname "$(readlink -f "$0")")/common.sh"
 lock_archive
+if [ "$SET_RELEASE" = 1 ] && ! is_line "$CHANNEL"; then
+    echo "FATAL: SET_RELEASE takes a product line, such as product1, not '$CHANNEL'" >&2; exit 1
+fi
 OS_VERSION="${OS_VERSION:-$(ubuntu_for "$DISTRO")}"
 [ -n "$OS_VERSION" ] \
     || { echo "FATAL: no Ubuntu release known for DISTRO=$DISTRO; set OS_VERSION" >&2; exit 1; }
@@ -66,22 +77,101 @@ cd "$ARCHIVE"
 
 # stable takes releases and edge builds of main, refused before anything moves.
 for spec in "$@"; do
+    # Names and versions become paths below, so nothing but Debian's own forms passes.
+    pkg="${spec%%:*}"; ver="${spec##*:}"
+    printf '%s' "$pkg" | grep -qE '^[a-z0-9][a-z0-9+.-]+$' \
+        || { echo "FATAL: '$pkg' in '$spec' is not a Debian package name" >&2; exit 1; }
+    printf '%s' "$ver" | grep -qE '^[0-9][A-Za-z0-9.+~-]*$' \
+        || { echo "FATAL: '$ver' in '$spec' is not a Debian version" >&2; exit 1; }
     case "$CHANNEL:${spec##*:}" in
         stable:*+git*) echo "FATAL: $spec is a build of main, and stable takes releases" >&2; exit 1 ;;
         edge:*+git*) ;;
         edge:*) echo "FATAL: $spec is not a build of main, and edge takes only those" >&2; exit 1 ;;
     esac
+    if is_line "$CHANNEL"; then
+        case "${spec##*:}" in
+            *+git*) echo "FATAL: $spec is a build of main, and the line $CHANNEL takes releases" >&2; exit 1 ;;
+        esac
+    fi
 done
+
+# newest_held <line> <package> <version>: the newest version of the package the line holds with
+# the same X.Y as <version>, or nothing.
+newest_held() {
+    local f v newest=""
+    for f in "out/$1/$2"_*.deb; do
+        [ -f "$f" ] || continue
+        v="$(basename "$f" .deb)"; v="${v#*_}"; v="${v%_*}"
+        [ "$(series_of "$v")" = "$(series_of "$3")" ] || continue
+        if [ -z "$newest" ] || dpkg --compare-versions "$v" gt "$newest"; then newest="$v"; fi
+    done
+    printf '%s' "$newest"
+}
+
+# line_takes <line> <package> <version>: the line holds the same X.Y, and nothing newer in it.
+line_takes() {
+    local held
+    held="$(newest_held "$1" "$2" "$3")"
+    [ -n "$held" ] && dpkg --compare-versions "$3" ge "$held"
+}
+
+# in_channel <package> <version> <channel>: the channel holds a .deb of that release.
+in_channel() { ls "out/$3/${1}_${2}"_*.deb >/dev/null 2>&1; }
+
+# copy_release <package> <version> <from> <to>: a release's packages, debug symbols and source.
+# Files the target did not have are recorded in COPIED.
+COPIED=()
+copy_release() {
+    local f
+    for f in "out/$3/${1}_${2}"_*.deb "out/$3/${1}-dbgsym_${2}"_*.ddeb "out/$3/${1}_${2}.src.tar.gz"; do
+        [ -f "$f" ] || continue
+        [ -e "out/$4/$(basename "$f")" ] || COPIED+=("out/$4/$(basename "$f")")
+        cp -p "$f" "out/$4/"
+    done
+}
+
+# A set release refused after its copies leaves the line as it was, so a later patch publishing the
+# line does not serve part of a set.
+SET_PUBLISHING=0
+undo_set() {
+    [ "$SET_RELEASE" = 1 ] && [ "$SET_PUBLISHING" = 0 ] || return 0
+    local f
+    for f in "${COPIED[@]}"; do rm -f "$f"; done
+}
+trap undo_set EXIT
 
 # Deliveries arrive in out/, and each channel publishes only its own.
 OUT="out/$CHANNEL"
 mkdir -p "$OUT"
-for spec in "$@"; do
-    pkg="${spec%%:*}"; ver="${spec##*:}"
-    for f in "out/${pkg}_${ver}"_*.deb "out/${pkg}-dbgsym_${ver}"_*.ddeb "out/${pkg}_${ver}.src.tar.gz"; do
-        [ -f "$f" ] && mv -f "$f" "$OUT/"
+if [ "$SET_RELEASE" = 1 ]; then
+    for spec in "$@"; do
+        pkg="${spec%%:*}"; ver="${spec##*:}"
+        in_channel "$pkg" "$ver" stable \
+            || { echo "FATAL: $pkg $ver is not in stable; a set release takes released versions" >&2; exit 1; }
     done
-done
+    for spec in "$@"; do
+        pkg="${spec%%:*}"; ver="${spec##*:}"
+        copy_release "$pkg" "$ver" stable "$CHANNEL"
+    done
+else
+    if is_line "$CHANNEL"; then
+        for spec in "$@"; do
+            pkg="${spec%%:*}"; ver="${spec##*:}"
+            line_takes "$CHANNEL" "$pkg" "$ver" || {
+                echo "FATAL: $CHANNEL holds no $pkg $(series_of "$ver").x older than $ver; a line takes only" >&2
+                echo "  newer patch releases of what it holds. A new version enters it with a set release" >&2
+                echo "  (SET_RELEASE=1)." >&2
+                exit 1
+            }
+        done
+    fi
+    for spec in "$@"; do
+        pkg="${spec%%:*}"; ver="${spec##*:}"
+        for f in "out/${pkg}_${ver}"_*.deb "out/${pkg}-dbgsym_${ver}"_*.ddeb "out/${pkg}_${ver}.src.tar.gz"; do
+            [ -f "$f" ] && mv -f "$f" "$OUT/"
+        done
+    done
+fi
 
 # Open roots are fetchable without an entitlement.
 OPEN=(public)
@@ -249,58 +339,90 @@ for spec in "$@"; do
     echo "    $pkg $ver -> $tree/sources/$pkg/"
 done
 
-echo "--- publishing"
-publisher_args
-keep_args=()
-if [ "$CHANNEL" = edge ]; then keep_args=(-e "KEEP_VERSIONS=${EDGE_KEEP:-3}"); fi
-docker run --rm \
-    "${PUBLISHER_ARGS[@]}" \
-    -e "OS_VERSION=$OS_VERSION" -e "CHANNEL=$CHANNEL" -e "LIST_DISTROS=$LIST_DISTROS" \
-    "${keep_args[@]}" \
-    -v "$PWD:/work" -v "$PWD/$OUT:/out" -v "$PWD/dist:/dist" \
-    "$IMAGE" /work/publish_archives.sh
-if [ "$CHANNEL" = edge ]; then prune_edge_sources; fi
+# publish_channel <channel> <spec>...: publish the channel's suite on this Ubuntu release, then
+# check that every spec landed in it.
+publish_channel() {
+    local ch="$1" suite out keep_args=() fail=0 spec pkg rest root ver tree found_in idx arch
+    shift
+    out="out/$ch"
+    if [ "$ch" = "$CHANNEL" ]; then suite="$SUITE"; else suite="${OS_VERSION}-${ch}"; fi
+    echo "--- publishing $suite"
+    publisher_args
+    if [ "$ch" = edge ]; then keep_args=(-e "KEEP_VERSIONS=${EDGE_KEEP:-3}"); fi
+    docker run --rm \
+        "${PUBLISHER_ARGS[@]}" \
+        -e "OS_VERSION=$OS_VERSION" -e "CHANNEL=$ch" -e "LIST_DISTROS=$LIST_DISTROS" \
+        "${keep_args[@]}" \
+        -v "$PWD:/work" -v "$PWD/$out:/out" -v "$PWD/dist:/dist" \
+        "$IMAGE" /work/publish_archives.sh \
+        || { echo "FATAL: publishing $suite failed" >&2; return 1; }
+    if [ "$ch" = edge ]; then prune_edge_sources; fi
 
-echo "--- verifying the published index"
-# publish_archives.sh skips a root it finds no packages for and still succeeds, so its exit code
-# alone cannot show that a delivery landed.
-fail=0
-for spec in "$@"; do
-    pkg="${spec%%:*}"; rest="${spec#*:}"
-    root="${rest%%:*}"; ver="${rest#*:}"
-    case "$root" in
-        public) tree="dist/public" ;;
-        *)      tree="dist/private/$root" ;;
-    esac
-    # Every architecture the root publishes, since which one a package carries is a property of
-    # the build. A match in one index says the package published, not that every architecture
-    # of it did.
-    found_in=""
-    shopt -s nullglob
-    indexes=("$tree/dists/$SUITE/main/binary-"*/Packages)
-    shopt -u nullglob
-    if [ ${#indexes[@]} -eq 0 ]; then
-        echo "    FAIL  no index under $tree/dists/$SUITE"; fail=1; continue
-    fi
-    for idx in "${indexes[@]}"; do
-        # Per stanza, not per line: aptly writes Priority, Section, Maintainer and Architecture
-        # between Package and Version, so the two are never adjacent.
-        if awk -v p="$pkg" -v v="$ver" '
-                /^$/             { pkg=""; ver=""; next }
-                /^Package: /     { pkg=substr($0, 10) }
-                /^Version: /     { ver=substr($0, 10) }
-                pkg==p && ver==v { found=1 }
-                END              { exit !found }
-            ' "$idx"; then
-            arch="${idx%/Packages}"
-            found_in="$found_in ${arch##*binary-}"
+    echo "--- verifying the published index"
+    # publish_archives.sh skips a root it finds no packages for and still succeeds, so its exit
+    # code alone cannot show that a delivery landed.
+    for spec in "$@"; do
+        pkg="${spec%%:*}"; rest="${spec#*:}"
+        root="${rest%%:*}"; ver="${rest#*:}"
+        case "$root" in
+            public) tree="dist/public" ;;
+            *)      tree="dist/private/$root" ;;
+        esac
+        # Every architecture the root publishes, since which one a package carries is a property of
+        # the build. A match in one index says the package published, not that every architecture
+        # of it did.
+        found_in=""
+        shopt -s nullglob
+        indexes=("$tree/dists/$suite/main/binary-"*/Packages)
+        shopt -u nullglob
+        if [ ${#indexes[@]} -eq 0 ]; then
+            echo "    FAIL  no index under $tree/dists/$suite"; fail=1; continue
+        fi
+        for idx in "${indexes[@]}"; do
+            # Per stanza, not per line: aptly writes Priority, Section, Maintainer and Architecture
+            # between Package and Version, so the two are never adjacent.
+            if awk -v p="$pkg" -v v="$ver" '
+                    /^$/             { pkg=""; ver=""; next }
+                    /^Package: /     { pkg=substr($0, 10) }
+                    /^Version: /     { ver=substr($0, 10) }
+                    pkg==p && ver==v { found=1 }
+                    END              { exit !found }
+                ' "$idx"; then
+                arch="${idx%/Packages}"
+                found_in="$found_in ${arch##*binary-}"
+            fi
+        done
+        if [ -n "$found_in" ]; then
+            echo "    ok    $pkg $ver in $tree/dists/$suite [${found_in# }]"
+        else
+            echo "    FAIL  $pkg $ver not indexed in $tree/dists/$suite"
+            fail=1
         fi
     done
-    if [ -n "$found_in" ]; then
-        echo "    ok    $pkg $ver in $tree [${found_in# }]"
-    else
-        echo "    FAIL  $pkg $ver not indexed in $tree"
-        fail=1
-    fi
-done
-exit "$fail"
+    return "$fail"
+}
+
+status=0
+SET_PUBLISHING=1
+publish_channel "$CHANNEL" "$@" || status=1
+
+# A release is also a patch of every line that holds the same X.Y of the package.
+# Only a release stable published: one it failed to publish must not reach a line either. A release
+# a line already holds is published again, so a retry repairs a line whose last publish failed.
+if [ "$CHANNEL" = stable ] && [ "$status" = 0 ]; then
+    for dir in out/*/; do
+        line="$(basename "$dir")"
+        is_line "$line" || continue
+        patches=()
+        for spec in "$@"; do
+            pkg="${spec%%:*}"; ver="${spec##*:}"
+            line_takes "$line" "$pkg" "$ver" || continue
+            copy_release "$pkg" "$ver" stable "$line"
+            patches+=("$spec")
+        done
+        [ ${#patches[@]} -gt 0 ] || continue
+        echo "--- patching the line $line"
+        publish_channel "$line" "${patches[@]}" || status=1
+    done
+fi
+exit "$status"

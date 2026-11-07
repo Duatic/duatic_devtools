@@ -199,3 +199,6 @@ jobs:
 
       - name: The publish gate passes only permitted roots and distros
         run: packaging/tests/publish_gate_test.sh
+
+      - name: Product lines take patches, set releases and patches from stable
+        run: packaging/tests/lines_test.sh
