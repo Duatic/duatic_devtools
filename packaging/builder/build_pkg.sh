@@ -61,6 +61,11 @@ PKG_DIR="${PKG_DIR#./}"
 # in a plain Ubuntu image into an ordinary Debian package, named as in package.xml and installed in
 # /usr, once per Ubuntu release. Anything else is a ROS package, ros-<distro>-<name> in /opt/ros.
 KIND="$(sed -n '/<duatic_package_kind>/{s:.*<duatic_package_kind>[[:space:]]*\([^<[:space:]]*\)[[:space:]]*</duatic_package_kind>.*:\1:p;q}' "$SRC/$PKG_DIR/package.xml")"
+# A tag the one-line pattern could not read is refused rather than taken for a ROS package.
+if [ -z "$KIND" ] && grep -q 'duatic_package_kind' "$SRC/$PKG_DIR/package.xml"; then
+    echo "FATAL: <duatic_package_kind> in $PKG_DIR/package.xml is not on one line as <duatic_package_kind>system</duatic_package_kind>" >&2
+    exit 1
+fi
 case "$KIND" in
     "" | ros) KIND=ros ;;
     system) ;;
@@ -68,12 +73,25 @@ case "$KIND" in
 esac
 
 if [ "$KIND" = system ]; then
-    # The image's own release, and no ROS in it: a dependency on ROS then fails the build.
-    os_version_default="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
+    # The image's own release, and no ROS in it: a dependency on ROS then fails the build. rosdep
+    # and bloom read ROS_DISTRO, which would resolve ROS keys, so a caller's is dropped.
+    unset ROS_DISTRO
+    image_id="$(. /etc/os-release && printf '%s' "${ID:-}")"
+    image_release="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
+    if [ "$image_id" != ubuntu ] || [ -z "$image_release" ]; then
+        echo "FATAL: $PKG is a system package, built in a plain Ubuntu image; this one is '$image_id'" >&2
+        exit 1
+    fi
     if [ -d /opt/ros ]; then
         echo "FATAL: $PKG is a system package, built in a plain Ubuntu image; this one has ROS in /opt/ros" >&2
         exit 1
     fi
+    # The release the binary is built against is the image's, so a different one would mislabel it.
+    if [ -n "${OS_VERSION:-}" ] && [ "$OS_VERSION" != "$image_release" ]; then
+        echo "FATAL: OS_VERSION=$OS_VERSION, but the image is Ubuntu $image_release; build in ubuntu:$OS_VERSION" >&2
+        exit 1
+    fi
+    OS_VERSION="$image_release"
 fi
 OS_VERSION="${OS_VERSION:-$os_version_default}"
 if [ -z "$OS_VERSION" ]; then
@@ -115,7 +133,13 @@ if [ "$KIND" = system ]; then
     apt-get install -y -qq --no-install-recommends \
     python3 python3-pip python3-setuptools git ca-certificates \
     fakeroot dpkg-dev debhelper devscripts equivs apt-utils git-lfs
-    PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install -q --no-cache-dir bloom rosdep catkin_pkg
+    PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install -q --no-cache-dir \
+        bloom==0.14.4 rosdep==0.27.0 catkin_pkg==1.1.1
+    # A name Ubuntu already uses would replace or conflict with its package on every machine.
+    if apt-cache show "$DEB_NAME" >/dev/null 2>&1; then
+        echo "FATAL: Ubuntu $OS_VERSION already has a package named $DEB_NAME; rename $PKG" >&2
+        exit 1
+    fi
 else
     apt-get install -y -qq --no-install-recommends \
     python3-bloom python3-catkin-pkg \
@@ -145,6 +169,14 @@ rosdep_update() {
     if [ "$KIND" = system ]; then rosdep update; else rosdep update --rosdistro "$ROS_DISTRO_ARG"; fi
 }
 rosdep_update
+
+if [ "$KIND" = system ]; then
+    declared="$(python3 -c "import sys, xml.etree.ElementTree as E; print((E.parse(sys.argv[1]).getroot().findtext('export/duatic_package_kind') or '').strip())" "$SRC/$PKG_DIR/package.xml")"
+    [ "$declared" = system ] || {
+        echo "FATAL: duatic_package_kind outside the <export> of $PKG_DIR/package.xml, or in a comment" >&2
+        exit 1
+    }
+fi
 
 # ---------------------------------------------------------------- 1. changelog
 # bloom requires CHANGELOG.rst. catkin_generate_changelog finds the VCS by .git, so it runs at
@@ -292,6 +324,12 @@ fi
 if [ "$KIND" = system ]; then
     echo "--- bloom-generate debian"
     bloom-generate debian --os-name ubuntu --os-version "$OS_VERSION"
+    # Whatever rosdep resolved: a system package that would build or run against ROS is refused.
+    if grep -E '^(Depends|Build-Depends|Pre-Depends):' debian/control | grep -q 'ros-'; then
+        echo "FATAL: $PKG is a system package, but it depends on ROS:" >&2
+        grep -E '^(Depends|Build-Depends|Pre-Depends):' debian/control >&2
+        exit 1
+    fi
 else
     echo "--- bloom-generate rosdebian"
     bloom-generate rosdebian \
@@ -412,6 +450,10 @@ fi
 echo "--- installing build dependencies"
 
 mk-build-deps --install --remove --tool='apt-get -y -qq --no-install-recommends' debian/control
+if [ "$KIND" = system ] && [ -d /opt/ros ]; then
+    echo "FATAL: $PKG is a system package, and installing its build dependencies brought ROS" >&2
+    exit 1
+fi
 
 echo "--- building"
 if [ "$KIND" = ros ]; then

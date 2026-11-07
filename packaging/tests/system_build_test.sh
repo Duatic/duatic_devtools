@@ -22,10 +22,12 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Build a system package with build_pkg.sh: a plain CMake library declaring
-# <duatic_package_kind>system</duatic_package_kind>, in plain Ubuntu, then check its name, that it
-# installs in /usr, and that a CMake project finds it with nothing sourced. Also check it is
-# refused in a ROS image and when it depends on ROS. Needs docker.
+# Build a system package with build_pkg.sh as callers do, with ROS_DISTRO and OS_VERSION set: a
+# plain CMake library declaring <duatic_package_kind>system</duatic_package_kind>, in plain Ubuntu.
+# Check its name, that it installs in /usr, and that a CMake project finds it with nothing
+# sourced; then each refusal: a ROS image, another Ubuntu release, a ROS dependency whether from
+# the public index or a private mapping, a kind tag it cannot read, and a name Ubuntu already has.
+# Needs docker.
 #
 # Usage:  system_build_test.sh
 
@@ -33,7 +35,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$(mktemp -d)"
-trap 'docker run --rm -v "$TMP:/t" ubuntu:24.04 rm -rf /t/repo /t/out /t/out-ros /t/out-dep 2>/dev/null; rm -rf "$TMP"' EXIT
+trap 'docker run --rm -v "$TMP:/t" ubuntu:24.04 sh -c "rm -rf /t/*" 2>/dev/null; rm -rf "$TMP"' EXIT
 
 # The fixture: one header, one library, a CMake package config.
 R="$TMP/repo/sys_fixture"
@@ -78,27 +80,51 @@ fail=0
 ok() { echo "    ok    $1"; }
 bad() { echo "    FAIL  $1"; fail=1; }
 
-# build <image> <out dir>: build_pkg.sh for sys_fixture in <image>; prints the log.
-build() {
-    mkdir -p "$TMP/$2"
-    docker run --rm -v "$HERE/../builder:/builder:ro" -v "$TMP/repo:/src" -v "$TMP/$2:/out" \
-        "$1" /builder/build_pkg.sh sys_fixture 2>&1 || true
+# variant <name> <sed expression on package.xml> [remove-changelog]: a commit of the fixture with
+# its package.xml changed, cloned to $TMP/<name>.
+variant() {
+    rm -rf "$TMP/$1"
+    git clone -q "$TMP/repo" "$TMP/$1"
+    [ -z "$2" ] || sed -i "$2" "$TMP/$1/sys_fixture/package.xml"
+    [ -z "${3:-}" ] || rm "$TMP/$1/sys_fixture/CHANGELOG.rst"
+    git -C "$TMP/$1" -c user.name=t -c user.email=t@example.invalid commit -q -am "$1" --allow-empty
 }
 
-echo "--- building in ubuntu:24.04"
-log="$(build ubuntu:24.04 out)"
-deb="$(ls "$TMP"/out/sys-fixture_*.deb 2>/dev/null | head -n1 || true)"
+# build <repo> <image> [docker args...]: build_pkg.sh for sys_fixture from $TMP/<repo> into
+# $TMP/<repo>-out, as callers run it; prints the log.
+build() {
+    local repo="$1" image="$2"; shift 2
+    mkdir -p "$TMP/$repo-out"
+    docker run --rm -e ROS_DISTRO=jazzy -e OS_VERSION=noble "$@" \
+        -v "$HERE/../builder:/builder:ro" -v "$TMP/$repo:/src" -v "$TMP/$repo-out:/out" \
+        "$image" /builder/build_pkg.sh sys_fixture 2>&1 || true
+}
+
+# refused <description> <message> <repo> <image> [docker args...]: no .deb, and the log says why.
+refused() {
+    local desc="$1" msg="$2" repo="$3" log; shift 3
+    log="$(build "$repo" "$@")"
+    if ! ls "$TMP/$repo-out"/*.deb >/dev/null 2>&1 && printf '%s' "$log" | grep -qF -- "$msg"; then
+        ok "$desc"
+    else
+        bad "$desc"; printf '%s\n' "$log" | tail -12 | sed 's/^/          /'
+    fi
+}
+
+echo "--- building in ubuntu:24.04, with ROS_DISTRO=jazzy and OS_VERSION=noble set"
+variant plain ""
+log="$(build plain ubuntu:24.04)"
+deb="$(ls "$TMP"/plain-out/sys-fixture_*.deb 2>/dev/null | head -n1 || true)"
 if [ -n "$deb" ]; then ok "named sys-fixture, without a ROS prefix"; else bad "no sys-fixture .deb"; printf '%s\n' "$log" | tail -25; fi
 if [ -n "$deb" ]; then
-    info="$(docker run --rm -v "$TMP/out:/out:ro" ubuntu:24.04 sh -c "dpkg-deb -I /out/$(basename "$deb"); dpkg-deb -c /out/$(basename "$deb")")"
+    info="$(docker run --rm -v "$TMP/plain-out:/out:ro" ubuntu:24.04 sh -c "dpkg-deb -I /out/$(basename "$deb"); dpkg-deb -c /out/$(basename "$deb")")"
     printf '%s' "$info" | grep -q ' ./usr/include/sys_fixture/answer.hpp$' && ok "installs in /usr" || bad "header not in /usr/include"
     printf '%s' "$info" | grep -q '/opt/' && bad "installs under /opt" || ok "nothing under /opt"
     printf '%s' "$info" | grep -q 'Duatic-Archive-Root: public' && ok "carries its archive root" || bad "no Duatic-Archive-Root"
     printf '%s' "$info" | grep -q 'Duatic-Vcs-Commit: [0-9a-f]\{40\}$' && ok "a clean commit" || bad "no clean Duatic-Vcs-Commit"
     printf '%s' "$info" | grep -q 'index.ros.org' && bad "a ROS index homepage" || ok "no ROS index homepage"
     printf '%s' "$info" | grep -E '^ Depends:' | grep -q 'ros-' && bad "depends on a ROS package" || ok "depends on no ROS package"
-    # A plain CMake project finds it with nothing sourced.
-    if docker run --rm -v "$TMP/out:/out:ro" ubuntu:24.04 bash -c '
+    if docker run --rm -v "$TMP/plain-out:/out:ro" ubuntu:24.04 bash -c '
         set -e; apt-get update -qq >/dev/null; apt-get install -y -qq cmake g++ >/dev/null 2>&1
         apt-get install -y -qq /out/sys-fixture_*.deb >/dev/null 2>&1
         mkdir /c && cd /c
@@ -111,19 +137,43 @@ if [ -n "$deb" ]; then
     fi
 fi
 
-echo "--- refused in a ROS image"
-log="$(build ros:jazzy-ros-base out-ros)"
-printf '%s' "$log" | grep -q "is a system package, built in a plain Ubuntu image" && ok "refused in a ROS image" || bad "built in a ROS image"
+echo "--- generating its changelog"
+variant nochangelog "" remove-changelog
+log="$(build nochangelog ubuntu:24.04)"
+ls "$TMP"/nochangelog-out/sys-fixture_*.deb >/dev/null 2>&1 && ok "builds with a generated changelog" \
+    || { bad "no build with a generated changelog"; printf '%s\n' "$log" | tail -12; }
 
-echo "--- refused with a ROS dependency"
-sed -i 's|<buildtool_depend>cmake</buildtool_depend>|<buildtool_depend>cmake</buildtool_depend>\n  <depend>rclcpp</depend>|' "$R/package.xml"
-git -C "$TMP/repo" -c user.name=t -c user.email=t@example.invalid commit -q -am "depend on rclcpp"
-log="$(build ubuntu:24.04 out-dep)"
-if ! ls "$TMP"/out-dep/*.deb >/dev/null 2>&1 && printf '%s' "$log" | grep -qi "rclcpp"; then
-    ok "refused when it depends on ROS"
+echo "--- refusals"
+variant rosimage ""
+refused "in a ROS image" "is a system package, built in a plain Ubuntu image; this one has ROS" rosimage ros:jazzy-ros-base
+variant release ""
+refused "for another Ubuntu release than the image's" "OS_VERSION=jammy, but the image is Ubuntu noble" release ubuntu:24.04 -e OS_VERSION=jammy
+
+variant rclcpp 's|<buildtool_depend>cmake</buildtool_depend>|<buildtool_depend>cmake</buildtool_depend>\n  <depend>rclcpp</depend>|'
+log="$(build rclcpp ubuntu:24.04)"
+if ! ls "$TMP"/rclcpp-out/*.deb >/dev/null 2>&1 \
+    && printf '%s' "$log" | grep -qE "Could not resolve rosdep key 'rclcpp'|it depends on ROS"; then
+    ok "a dependency on ROS from the public index"
 else
-    bad "built while depending on rclcpp"; printf '%s\n' "$log" | tail -10
+    bad "a dependency on ROS from the public index"; printf '%s\n' "$log" | tail -12
 fi
+
+variant private 's|<buildtool_depend>cmake</buildtool_depend>|<buildtool_depend>cmake</buildtool_depend>\n  <depend>ros_thing</depend>|'
+mkdir -p "$TMP/rosdep"
+printf 'ros_thing:\n  ubuntu:\n    noble: [ros-jazzy-ros-thing]\n' > "$TMP/rosdep/map.yaml"
+refused "a dependency on ROS from a private mapping" "it depends on ROS" private ubuntu:24.04 \
+    -v "$TMP/rosdep:/rosdep:ro" -e ROSDEP_YAML=/rosdep/map.yaml
+
+variant split 's|<duatic_package_kind>system</duatic_package_kind>|<duatic_package_kind>\n      system\n    </duatic_package_kind>|'
+refused "a kind tag over several lines" "is not on one line" split ubuntu:24.04
+
+variant comment 's|<duatic_package_kind>system</duatic_package_kind>|<!-- <duatic_package_kind>system</duatic_package_kind> -->|'
+refused "a kind tag in a comment" "outside the <export>" comment ubuntu:24.04
+
+variant clash 's|<name>sys_fixture</name>|<name>hello</name>|'
+log="$(docker run --rm -e ROS_DISTRO=jazzy -v "$HERE/../builder:/builder:ro" -v "$TMP/clash:/src" ubuntu:24.04 /builder/build_pkg.sh hello 2>&1 || true)"
+printf '%s' "$log" | grep -qF "already has a package named hello" && ok "a name Ubuntu already has" \
+    || { bad "a name Ubuntu already has"; printf '%s\n' "$log" | tail -8; }
 
 echo
 [ "$fail" = 0 ] && echo "all passed" || echo "FAILURES"

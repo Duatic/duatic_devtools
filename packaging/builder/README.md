@@ -72,9 +72,15 @@ per Ubuntu release rather than once per ROS distro. It declares, in the `<export
 <duatic_package_kind>system</duatic_package_kind>
 ```
 
-It is built in a plain Ubuntu image, which sets the Ubuntu release, and the builder refuses one with
-ROS in `/opt/ros`. Every dependency must resolve without ROS: a `<depend>` on a ROS package stops
-the build.
+It is built in a plain Ubuntu image, which sets the Ubuntu release: the builder refuses an image
+with ROS in `/opt/ros`, one that is not Ubuntu, and an `OS_VERSION` naming another release than the
+image's. `ROS_DISTRO` is ignored. Every dependency must resolve without ROS: a dependency resolving
+to a ROS package, from the public index or a `ROSDEP_YAML` mapping, stops the build, and so does
+a package name Ubuntu already uses. bloom, rosdep and catkin_pkg are installed with pip at fixed
+versions, since Ubuntu does not package bloom.
+
+`workspace/gen_release_set.sh` names a system package without the distro in its mapping and lists,
+and `workspace/build_all.sh` builds it in `ubuntu:<OS_VERSION>`.
 
 ```bash
 docker run --rm -it \
