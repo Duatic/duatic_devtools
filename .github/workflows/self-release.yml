@@ -20,7 +20,7 @@ on:
 jobs:
   prepare:
     if: github.event_name == 'workflow_dispatch'
-    uses: Duatic/ci-workflows/.github/workflows/reusable_prepare_changelog_release.yml@v1
+    uses: Duatic/ci-workflows/.github/workflows/reusable_prepare_changelog_release.yml@v2
     with:
       bump: ${{ inputs.bump }}
       runner: ${{ inputs.runner }}
@@ -30,4 +30,4 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged
     permissions:
       contents: write
-    uses: Duatic/ci-workflows/.github/workflows/reusable_changelog_release_tag.yml@v1
+    uses: Duatic/ci-workflows/.github/workflows/reusable_changelog_release_tag.yml@v2

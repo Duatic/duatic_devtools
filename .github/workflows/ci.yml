@@ -56,7 +56,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   format:
-    uses: Duatic/ci-workflows/.github/workflows/pre-commit.yml@v1
+    uses: Duatic/ci-workflows/.github/workflows/pre-commit.yml@v2
     with:
       runner: ${{ inputs.runner || 'ubuntu-latest' }}
 
