@@ -183,9 +183,10 @@ named() {
         ubuntu:24.04 /builder/build_pkg.sh "$2" 2>&1 || true)"
     printf '%s' "$log" | grep -qF -- "$3" && ok "$1" || { bad "$1"; printf '%s\n' "$log" | tail -8; }
 }
-named "a name Ubuntu already has" hello "a system package is named duatic_*"
-named "a system package named ros-*" ros_thing "a system package is named duatic_*"
-named "the bare prefix" duatic_ "a system package is named duatic_*"
+named "a name Ubuntu already has" hello "already has a package named hello"
+named "a name that is a public rosdep key" eigen "is already a rosdep key in the public index"
+named "a system package named ros-*" ros_thing "a system package is not named ros-*"
+named "a name without a prefix builds" plain_lib "Done. Next: ./make_repo.sh"
 
 echo
 [ "$fail" = 0 ] && echo "all passed" || echo "FAILURES"
