@@ -95,8 +95,9 @@ SETUP_VERSION=1
 All three are required. One file rather than settings per caller: every publish of a line, by any
 key, rebuilds the public suite. A version the archive already holds is reused while its contents
 are unchanged; a publish whose contents differ is refused, and so is one whose `SETUP_VERSION` is
-older than the archive holds. Raise `SETUP_VERSION` when the key or `SETUP_URL` changes. Gated
-roots get none.
+older than the archive holds; either refusal comes before any root publishes. Raise
+`SETUP_VERSION` when the key or `SETUP_URL` changes. Gated roots get none. The key and the source
+are conffiles: `apt remove` keeps a source that still verifies, `apt purge` removes both.
 
 ## Sources
 

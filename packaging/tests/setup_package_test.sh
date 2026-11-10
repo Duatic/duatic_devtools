@@ -37,22 +37,23 @@ mkdir -p "$TMP/work/lists" "$TMP/work/out"
 cp "$HERE/../archive/"*.sh "$TMP/work/"
 printf '# root: public\napp\n' > "$TMP/work/lists/public-jazzy.txt"
 printf '# root: products/a\ngapp\n' > "$TMP/work/lists/products-a-jazzy.txt"
+printf '# root: public\napp\n' > "$TMP/work/lists/public-humble.txt"
 
 out="$(docker run --rm -v "$TMP/work:/work" ubuntu:24.04 bash -c '
     set -e
-    mk() {
-        d="/tmp/d/$1"; mkdir -p "$d/DEBIAN"
-        printf "Package: %s\nVersion: 1.0.0-0noble\nArchitecture: amd64\nMaintainer: t <t@example.invalid>\nDescription: t\n" \
-            "$1" > "$d/DEBIAN/control"
-        dpkg-deb -b "$d" "/work/out/$1_1.0.0-0noble_amd64.deb" >/dev/null
+    mk() {  # mk <package> [ubuntu]
+        d="/tmp/d/$1-${2:-noble}"; mkdir -p "$d/DEBIAN"
+        printf "Package: %s\nVersion: 1.0.0-0%s\nArchitecture: amd64\nMaintainer: t <t@example.invalid>\nDescription: t\n" \
+            "$1" "${2:-noble}" > "$d/DEBIAN/control"
+        dpkg-deb -b "$d" "/work/out/$1_1.0.0-0${2:-noble}_amd64.deb" >/dev/null
     }
-    mk app; mk gapp
+    mk app; mk gapp; mk app jammy
     pub() {  # pub <channel> [VAR=value...]: write setup.conf from the defaults and VARs, publish noble-<channel>
         ch="$1"; shift
         conf="SETUP_URL=file:///work/dist/public SETUP_NAME=example SETUP_VERSION=1 $*"
         : > /work/setup.conf
         for kv in $conf; do printf "%s\n" "$kv" >> /work/setup.conf; done
-        env OS_VERSION=noble LIST_DISTROS=jazzy CHANNEL="$ch" PKGDIRS=/work/out DIST=/work/dist \
+        env OS_VERSION="${OSV:-noble}" LIST_DISTROS="${LD:-jazzy}" CHANNEL="$ch" PKGDIRS=/work/out DIST=/work/dist \
             ALLOW_THROWAWAY_KEY=1 /work/publish_archives.sh > /tmp/log 2>&1 && echo "published $ch" \
             || { echo "refused $ch"; grep FATAL /tmp/log; }
     }
@@ -68,12 +69,17 @@ out="$(docker run --rm -v "$TMP/work:/work" ubuntu:24.04 bash -c '
     pub stable
     grep -q "^Package: example-" /work/dist/public/dists/noble-stable/main/binary-amd64/Packages \
         && echo "stable has a setup package" || echo "stable: none"
+    gated=/work/dist/private/products/a/dists/noble-product1/InRelease
+    gsum="$(sha256sum < "$gated")"
     pub product1 SETUP_URL=file:///elsewhere
+    [ "$(sha256sum < "$gated")" = "$gsum" ] && echo "gated root after a refusal: unchanged"
     echo "after a refusal: $(dpkg-deb -f "$boot" Version) $( [ "$(sha256sum < "$boot")" = "$sum" ] && echo unchanged)"
     pub product1 SETUP_VERSION=2
     echo "bootstrap now: $(dpkg-deb -f "$boot" Version)"
     pub product1 SETUP_VERSION=1
     pub product2
+    OSV=jammy LD=humble pub product1
+    echo "jammy bootstrap: $(dpkg-deb -f /work/dist/public/setup/jammy/example-product1-apt-source.deb Version)"
     dpkg-deb -c "$boot" | awk "{print \$6}" | grep -v "/$"
     dpkg-deb --fsys-tarfile "$boot" | tar -xO ./etc/apt/sources.list.d/example-product1-apt-source.sources
 ' < /dev/null 2>&1)" || { printf '%s\n' "$out"; exit 1; }
@@ -101,10 +107,12 @@ check "a channel that is not a line gets none" "stable: none" "$out"
 check "changed contents without a new version are refused" "refused product1" "$out"
 check "  saying so" "FATAL: the example-product1-apt-source 1-0noble contents changed; raise SETUP_VERSION in setup.conf" "$out"
 check "  and leave the bootstrap as published" "after a refusal: 1-0noble unchanged" "$out"
+check "  and every other root as it was" "gated root after a refusal: unchanged" "$out"
 check "a new SETUP_VERSION takes them" "bootstrap now: 2-0noble" "$out"
 check "an older SETUP_VERSION is refused" "FATAL: the archive holds example-product1-apt-source 2-0noble, newer than SETUP_VERSION gives (1-0noble)" "$out"
 check "  with the archive key, named for the package" "./usr/share/keyrings/example-product1-apt-source.gpg" "$out"
 check "another line publishes its own" "published product2" "$out"
+check "another Ubuntu release gets its own version" "jammy bootstrap: 1-0jammy" "$out"
 check "  and the line's suite as a source" "Suites: noble-product1" "$out"
 check "a machine installs two lines' setup packages side by side" "two lines side by side" "$install"
 check "a machine installs the line through it" "installed app 1.0.0-0noble" "$install"

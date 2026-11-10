@@ -250,8 +250,8 @@ if [ -f "$WORK/setup.conf" ]; then
 fi
 
 # setup_package: build <SETUP_NAME>-<line>-apt-source for this suite, the archive key and an apt
-# source for the line, and print the .deb to add. A version the archive already holds is reused
-# while its contents are unchanged, and refused when they changed; an older version is refused.
+# source for the line, into SETUP_DEB. A version the archive already holds is reused while its
+# contents are unchanged, and refused when they changed; an older version is refused.
 setup_package() {
     local pkg ver dir new f v have="" cur cmp
     pkg="${SETUP_NAME}-${CHANNEL}-apt-source"
@@ -277,7 +277,10 @@ Priority: optional
 Description: apt source for the ${CHANNEL} line of ${SETUP_URL}
  The archive's signing key and the ${SUITE} suite.
 CTL
-    echo "/etc/apt/sources.list.d/${pkg}.sources" > "$dir/DEBIAN/conffiles"
+    # Both, so a removed package leaves a source that still verifies; purging removes both.
+    printf '%s\n' "/etc/apt/sources.list.d/${pkg}.sources" "/usr/share/keyrings/${pkg}.gpg" > "$dir/DEBIAN/conffiles"
+    find "$dir" -type d -exec chmod 0755 {} +
+    find "$dir" -type f -exec chmod 0644 {} +
     find "$dir" -exec touch -h -d @0 {} +
     new="$(mktemp -d)/${pkg}_${ver}_all.deb"
     SOURCE_DATE_EPOCH=0 dpkg-deb --root-owner-group -Zxz --build "$dir" "$new" >/dev/null
@@ -303,8 +306,15 @@ CTL
         rm -rf "$cur" "$cmp"
         cp "$have" "$new"
     fi
-    printf '%s\n' "$new"
+    SETUP_DEB="$new"
 }
+
+# Built and checked before any root publishes, so a refusal leaves every root as it was.
+SETUP_DEB=""
+if [ -n "$SETUP_URL" ] && [ -z "${PROMOTE_FROM:-}" ] && printf '%s' "$CHANNEL" | grep -qE '^[a-z]+[0-9]+$' \
+    && [ -n "${ROOT_SET[public]:-}" ]; then
+    setup_package
+fi
 
 # ---------------------------------------------------------------- publish each root
 for entry in "${ARCHIVES[@]}"; do
@@ -396,8 +406,8 @@ for entry in "${ARCHIVES[@]}"; do
 
     # A product line's suite in the public root carries the package that sets a machine up for it.
     setup_deb=""
-    if [ -n "$SETUP_URL" ] && [ "$ep" = public ] && printf '%s' "$CHANNEL" | grep -qE '^[a-z]+[0-9]+$'; then
-        setup_deb="$(setup_package)"
+    if [ -n "$SETUP_DEB" ] && [ "$ep" = public ]; then
+        setup_deb="$SETUP_DEB"
         found+=("$setup_deb")
     fi
 
