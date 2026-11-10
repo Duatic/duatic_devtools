@@ -233,6 +233,54 @@ drop_unpublished_edge() {
     apt_ly db cleanup >/dev/null
 }
 
+# setup_package <tree>: build <SETUP_NAME>-<line>-apt-source for this suite, the archive key and an
+# apt source for the line in it, and place it in <tree>/setup/<ubuntu>/ for a machine to install
+# before apt knows the archive. Prints the .deb added to the suite.
+setup_package() {
+    local tree="$1" pkg ver dir boot new
+    printf '%s' "${SETUP_NAME:-}" | grep -qE '^[a-z0-9][a-z0-9.+-]*$' \
+        || { echo "FATAL: SETUP_URL is set, so SETUP_NAME must name the package, not '${SETUP_NAME:-}'" >&2; exit 1; }
+    printf '%s' "${SETUP_VERSION:-1}" | grep -qE '^[0-9][0-9.]*$' \
+        || { echo "FATAL: SETUP_VERSION is '${SETUP_VERSION:-}', not a version" >&2; exit 1; }
+    pkg="${SETUP_NAME}-${CHANNEL}-apt-source"
+    ver="${SETUP_VERSION:-1}-0${OS_VERSION}"
+    dir="$(mktemp -d)"
+    mkdir -p "$dir/DEBIAN" "$dir/usr/share/keyrings" "$dir/etc/apt/sources.list.d"
+    gpg --export "$KEYID" > "$dir/usr/share/keyrings/${SETUP_NAME}-archive-keyring.gpg"
+    cat > "$dir/etc/apt/sources.list.d/${pkg}.sources" <<SRC
+Types: deb
+URIs: ${SETUP_URL}
+Suites: ${SUITE}
+Components: main
+Signed-By: /usr/share/keyrings/${SETUP_NAME}-archive-keyring.gpg
+SRC
+    cat > "$dir/DEBIAN/control" <<CTL
+Package: ${pkg}
+Version: ${ver}
+Architecture: all
+Maintainer: $(gpg --list-keys --with-colons "$KEYID" | awk -F: '/^uid/{print $10; exit}')
+Section: admin
+Priority: optional
+Description: apt source for the ${CHANNEL} line of ${SETUP_URL}
+ The archive's signing key and the ${SUITE} suite.
+CTL
+    echo "/etc/apt/sources.list.d/${pkg}.sources" > "$dir/DEBIAN/conffiles"
+    # The same contents give the same bytes, so a republish does not change a published version.
+    find "$dir" -exec touch -h -d @0 {} +
+    new="$(mktemp -d)/${pkg}_${ver}_all.deb"
+    SOURCE_DATE_EPOCH=0 dpkg-deb --root-owner-group -Zxz --build "$dir" "$new" >/dev/null
+    rm -rf "$dir"
+    boot="$tree/setup/$OS_VERSION/${pkg}.deb"
+    if [ -f "$boot" ] && ! cmp -s "$boot" "$new" \
+        && [ "$(dpkg-deb -f "$boot" Version)" = "$ver" ]; then
+        echo "FATAL: the ${pkg} ${ver} contents changed; raise SETUP_VERSION" >&2
+        exit 1
+    fi
+    mkdir -p "$(dirname "$boot")"
+    cp "$new" "$boot.tmp" && mv "$boot.tmp" "$boot"
+    printf '%s\n' "$new"
+}
+
 # ---------------------------------------------------------------- publish each root
 for entry in "${ARCHIVES[@]}"; do
     ep="${entry%%|*}"; rest="${entry#*|}"; tree="${rest%%|*}"; prefixes="${rest#*|}"
@@ -319,6 +367,12 @@ for entry in "${ARCHIVES[@]}"; do
         shopt -u nullglob
         unset groups names keep_build keep_source
         found=("${kept[@]}")
+    fi
+
+    # A product line's suite in the public root carries the package that sets a machine up for it.
+    if [ -n "${SETUP_URL:-}" ] && [ "$ep" = public ] && printf '%s' "$CHANNEL" | grep -qE '^[a-z]+[0-9]+$'; then
+        setup_deb="$(setup_package "$tree")"
+        found+=("$setup_deb")
     fi
 
     for f in "${found[@]}"; do

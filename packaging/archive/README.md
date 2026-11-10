@@ -70,6 +70,25 @@ breaking change. A product's next major gets a new line.
 - A set release that is refused before publishing leaves the line as it was. One whose publish fails
   keeps its copies, and the next publish of the line serves the whole set.
 
+### Setup packages
+
+With `SETUP_URL` and `SETUP_NAME` set for `add_and_publish.sh`, every publish of a line in the
+`public` root also builds `<SETUP_NAME>-<line>-apt-source`: the archive's key in
+`/usr/share/keyrings/<SETUP_NAME>-archive-keyring.gpg`, and an apt source for the line's suite at
+`SETUP_URL`. It goes into the line's suite, so `apt upgrade` brings a new key or URL, and to
+`setup/<ubuntu>/<SETUP_NAME>-<line>-apt-source.deb` in the root, which a machine installs before apt
+knows the archive:
+
+```bash
+curl -fsSLO <archive URL>/setup/noble/<SETUP_NAME>-<line>-apt-source.deb
+sudo apt install ./<SETUP_NAME>-<line>-apt-source.deb
+sudo apt update
+```
+
+Its version is `SETUP_VERSION` (default `1`). Every publish builds the same bytes from the same
+contents, and a publish whose contents differ from the published version is refused: raise
+`SETUP_VERSION` when the key or `SETUP_URL` changes. Gated roots get none.
+
 ## Sources
 
 An open root carries each package's source beside its binaries, as the tarball `build_pkg.sh`

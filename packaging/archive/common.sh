@@ -57,7 +57,8 @@ lock_archive() {
 # The docker run arguments every publisher run needs: the passphrase file, named as the container
 # sees it since that is where gpg runs, and the host user to hand files back to.
 publisher_args() {
-    PUBLISHER_ARGS=(-e "EXPECTED_KEY_FPR=${EXPECTED_KEY_FPR:-}" -e "ALLOW_THROWAWAY_KEY=${ALLOW_THROWAWAY_KEY:-0}")
+    PUBLISHER_ARGS=(-e "EXPECTED_KEY_FPR=${EXPECTED_KEY_FPR:-}" -e "ALLOW_THROWAWAY_KEY=${ALLOW_THROWAWAY_KEY:-0}"
+        -e "SETUP_URL=${SETUP_URL:-}" -e "SETUP_NAME=${SETUP_NAME:-}" -e "SETUP_VERSION=${SETUP_VERSION:-1}")
     if [ -n "${GPG_PASSPHRASE_FILE:-}" ]; then
         PUBLISHER_ARGS+=(-e "GPG_PASSPHRASE_FILE=$GPG_PASSPHRASE_FILE")
     elif [ -f "$ARCHIVE/.passphrase" ]; then

@@ -50,7 +50,7 @@ jobs:
           has() { echo "$changed" | grep -qE "$1"; }
           {
               has '^packaging/(builder|tests)/'        && echo "builder=true" || echo "builder=false"
-              has '^packaging/(archive/|tests/(open_roots|publish_gate|lines|system_suites)_test\.sh$)' && echo "archive=true" || echo "archive=false"
+              has '^packaging/(archive/|tests/(open_roots|publish_gate|lines|system_suites|setup_package)_test\.sh$)' && echo "archive=true" || echo "archive=false"
               has '^packaging/tests/'                  && echo "tests=true"   || echo "tests=false"
               has '\.sh$'                              && echo "shell=true"   || echo "shell=false"
           } >> "$GITHUB_OUTPUT"
@@ -209,3 +209,6 @@ jobs:
 
       - name: Each Ubuntu release's build of a system package reaches only its own suite
         run: packaging/tests/system_suites_test.sh
+
+      - name: A product line's setup package installs the line
+        run: packaging/tests/setup_package_test.sh
