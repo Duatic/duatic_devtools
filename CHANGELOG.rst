@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.15.0 (2026-11-10)
+-------------------
+* feat(archive): build each product line's setup package (#44)
+
 1.14.0 (2026-11-10)
 -------------------
 * feat(builder): let a system package keep a name without a prefix (#42)
