@@ -72,10 +72,11 @@ breaking change. A product's next major gets a new line.
 
 ### Setup packages
 
-With `SETUP_URL` and `SETUP_NAME` set for `add_and_publish.sh`, every publish of a line in the
-`public` root also builds `<SETUP_NAME>-<line>-apt-source`: the archive's key in
-`/usr/share/keyrings/<SETUP_NAME>-archive-keyring.gpg`, and an apt source for the line's suite at
-`SETUP_URL`. It goes into the line's suite, so `apt upgrade` brings a new key or URL, and to
+With a `setup.conf` beside `publish_archives.sh` in the archive directory, every publish of a line
+in the `public` root also builds `<SETUP_NAME>-<line>-apt-source`: the archive's key in
+`/usr/share/keyrings/<SETUP_NAME>-<line>-apt-source.gpg`, and an apt source for the line's suite at
+`SETUP_URL`. Packages of several lines install side by side. It goes into the line's suite, so `apt
+upgrade` brings a new key or URL, and once the suite is published, to
 `setup/<ubuntu>/<SETUP_NAME>-<line>-apt-source.deb` in the root, which a machine installs before apt
 knows the archive:
 
@@ -85,9 +86,17 @@ sudo apt install ./<SETUP_NAME>-<line>-apt-source.deb
 sudo apt update
 ```
 
-Its version is `SETUP_VERSION` (default `1`). Every publish builds the same bytes from the same
-contents, and a publish whose contents differ from the published version is refused: raise
-`SETUP_VERSION` when the key or `SETUP_URL` changes. Gated roots get none.
+```
+SETUP_URL=https://apt.example.com
+SETUP_NAME=example
+SETUP_VERSION=1
+```
+
+All three are required. One file rather than settings per caller: every publish of a line, by any
+key, rebuilds the public suite. A version the archive already holds is reused while its contents
+are unchanged; a publish whose contents differ is refused, and so is one whose `SETUP_VERSION` is
+older than the archive holds. Raise `SETUP_VERSION` when the key or `SETUP_URL` changes. Gated
+roots get none.
 
 ## Sources
 

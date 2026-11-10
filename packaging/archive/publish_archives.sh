@@ -233,26 +233,39 @@ drop_unpublished_edge() {
     apt_ly db cleanup >/dev/null
 }
 
-# setup_package <tree>: build <SETUP_NAME>-<line>-apt-source for this suite, the archive key and an
-# apt source for the line in it, and place it in <tree>/setup/<ubuntu>/ for a machine to install
-# before apt knows the archive. Prints the .deb added to the suite.
+# A product line's setup package, configured in setup.conf beside this script: SETUP_URL (where
+# machines fetch the public root), SETUP_NAME (the package's prefix) and SETUP_VERSION. One file
+# rather than each caller's environment, since every publish of a line rebuilds the public suite.
+SETUP_URL="" SETUP_NAME="" SETUP_VERSION=""
+if [ -f "$WORK/setup.conf" ]; then
+    SETUP_URL="$(sed -n 's/^SETUP_URL=//p' "$WORK/setup.conf" | tail -1)"
+    SETUP_NAME="$(sed -n 's/^SETUP_NAME=//p' "$WORK/setup.conf" | tail -1)"
+    SETUP_VERSION="$(sed -n 's/^SETUP_VERSION=//p' "$WORK/setup.conf" | tail -1)"
+    printf '%s' "$SETUP_URL" | grep -qE '^[a-z]+://[^[:space:]]+$' \
+        || { echo "FATAL: setup.conf: SETUP_URL is '$SETUP_URL', not a URL" >&2; exit 1; }
+    printf '%s' "$SETUP_NAME" | grep -qE '^[a-z0-9][a-z0-9.+-]*$' \
+        || { echo "FATAL: setup.conf: SETUP_NAME is '$SETUP_NAME', not a package name" >&2; exit 1; }
+    printf '%s' "$SETUP_VERSION" | grep -qE '^[0-9][0-9.]*$' \
+        || { echo "FATAL: setup.conf: SETUP_VERSION is '$SETUP_VERSION', not a version" >&2; exit 1; }
+fi
+
+# setup_package: build <SETUP_NAME>-<line>-apt-source for this suite, the archive key and an apt
+# source for the line, and print the .deb to add. A version the archive already holds is reused
+# while its contents are unchanged, and refused when they changed; an older version is refused.
 setup_package() {
-    local tree="$1" pkg ver dir boot new
-    printf '%s' "${SETUP_NAME:-}" | grep -qE '^[a-z0-9][a-z0-9.+-]*$' \
-        || { echo "FATAL: SETUP_URL is set, so SETUP_NAME must name the package, not '${SETUP_NAME:-}'" >&2; exit 1; }
-    printf '%s' "${SETUP_VERSION:-1}" | grep -qE '^[0-9][0-9.]*$' \
-        || { echo "FATAL: SETUP_VERSION is '${SETUP_VERSION:-}', not a version" >&2; exit 1; }
+    local pkg ver dir new f v have="" cur cmp
     pkg="${SETUP_NAME}-${CHANNEL}-apt-source"
-    ver="${SETUP_VERSION:-1}-0${OS_VERSION}"
+    ver="${SETUP_VERSION}-0${OS_VERSION}"
     dir="$(mktemp -d)"
     mkdir -p "$dir/DEBIAN" "$dir/usr/share/keyrings" "$dir/etc/apt/sources.list.d"
-    gpg --export "$KEYID" > "$dir/usr/share/keyrings/${SETUP_NAME}-archive-keyring.gpg"
+    # Named for the package, so the setup packages of several lines install side by side.
+    gpg --export "$KEYID" > "$dir/usr/share/keyrings/${pkg}.gpg"
     cat > "$dir/etc/apt/sources.list.d/${pkg}.sources" <<SRC
 Types: deb
 URIs: ${SETUP_URL}
 Suites: ${SUITE}
 Components: main
-Signed-By: /usr/share/keyrings/${SETUP_NAME}-archive-keyring.gpg
+Signed-By: /usr/share/keyrings/${pkg}.gpg
 SRC
     cat > "$dir/DEBIAN/control" <<CTL
 Package: ${pkg}
@@ -265,19 +278,31 @@ Description: apt source for the ${CHANNEL} line of ${SETUP_URL}
  The archive's signing key and the ${SUITE} suite.
 CTL
     echo "/etc/apt/sources.list.d/${pkg}.sources" > "$dir/DEBIAN/conffiles"
-    # The same contents give the same bytes, so a republish does not change a published version.
     find "$dir" -exec touch -h -d @0 {} +
     new="$(mktemp -d)/${pkg}_${ver}_all.deb"
     SOURCE_DATE_EPOCH=0 dpkg-deb --root-owner-group -Zxz --build "$dir" "$new" >/dev/null
     rm -rf "$dir"
-    boot="$tree/setup/$OS_VERSION/${pkg}.deb"
-    if [ -f "$boot" ] && ! cmp -s "$boot" "$new" \
-        && [ "$(dpkg-deb -f "$boot" Version)" = "$ver" ]; then
-        echo "FATAL: the ${pkg} ${ver} contents changed; raise SETUP_VERSION" >&2
-        exit 1
+    # What the archive already holds of this package for this Ubuntu release, from aptly's pool.
+    while IFS= read -r f; do
+        v="${f##*"${pkg}"_}"; v="${v%_all.deb}"
+        case "$v" in *-0"${OS_VERSION}") ;; *) continue ;; esac
+        if dpkg --compare-versions "$v" gt "$ver"; then
+            echo "FATAL: the archive holds ${pkg} ${v}, newer than SETUP_VERSION gives (${ver})" >&2
+            exit 1
+        fi
+        [ "$v" = "$ver" ] && have="$f"
+    done < <(find "$APTLYDIR/pool" -type f -name "*${pkg}_*_all.deb" 2>/dev/null)
+    if [ -n "$have" ]; then
+        # Compared unpacked, so a different dpkg or gzip cannot fail an unchanged package.
+        cur="$(mktemp -d)"; cmp="$(mktemp -d)"
+        dpkg-deb -R "$have" "$cur"; dpkg-deb -R "$new" "$cmp"
+        if ! diff -r "$cur" "$cmp" >/dev/null; then
+            echo "FATAL: the ${pkg} ${ver} contents changed; raise SETUP_VERSION in setup.conf" >&2
+            exit 1
+        fi
+        rm -rf "$cur" "$cmp"
+        cp "$have" "$new"
     fi
-    mkdir -p "$(dirname "$boot")"
-    cp "$new" "$boot.tmp" && mv "$boot.tmp" "$boot"
     printf '%s\n' "$new"
 }
 
@@ -370,8 +395,9 @@ for entry in "${ARCHIVES[@]}"; do
     fi
 
     # A product line's suite in the public root carries the package that sets a machine up for it.
-    if [ -n "${SETUP_URL:-}" ] && [ "$ep" = public ] && printf '%s' "$CHANNEL" | grep -qE '^[a-z]+[0-9]+$'; then
-        setup_deb="$(setup_package "$tree")"
+    setup_deb=""
+    if [ -n "$SETUP_URL" ] && [ "$ep" = public ] && printf '%s' "$CHANNEL" | grep -qE '^[a-z]+[0-9]+$'; then
+        setup_deb="$(setup_package)"
         found+=("$setup_deb")
     fi
 
@@ -410,6 +436,13 @@ for entry in "${ARCHIVES[@]}"; do
     fi
     publish_snapshot "$ep" "$snap" "$archs"
     if [ "$CHANNEL" = edge ]; then drop_unpublished_edge "$ep"; fi
+    # For a machine to install before apt knows the archive; only once the suite carries it.
+    if [ -n "$setup_deb" ]; then
+        boot="$(basename "$setup_deb")"; boot="$tree/setup/$OS_VERSION/${boot%%_*}.deb"
+        mkdir -p "$(dirname "$boot")"
+        cp "$setup_deb" "$boot.tmp" && mv "$boot.tmp" "$boot"
+        echo "    setup: ${boot#"$DIST"/}"
+    fi
 done
 
 echo

@@ -4,6 +4,9 @@ gnupg/
 archive-key/
 .passphrase
 
+# Host configuration.
+setup.conf
+
 # Generated: the package lists, the rosdep mapping, and the published tree.
 lists/
 rosdep/
