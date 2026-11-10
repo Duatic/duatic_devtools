@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.14.0 (2026-11-10)
+-------------------
+* feat(builder): let a system package keep a name without a prefix (#42)
+
 1.13.0 (2026-11-07)
 -------------------
 * feat(packaging): system packages for code that needs no ROS (#39)
