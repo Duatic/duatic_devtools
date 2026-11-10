@@ -294,7 +294,7 @@ CTL
             exit 1
         fi
         [ "$v" = "$ver" ] && have="$f"
-    done < <(find "$APTLYDIR/pool" -type f -name "*${pkg}_*_all.deb" 2>/dev/null)
+    done < <(find "$APTLYDIR/pool" -type f \( -name "${pkg}_*_all.deb" -o -name "*_${pkg}_*_all.deb" \) 2>/dev/null)
     if [ -n "$have" ]; then
         # Compared unpacked, so a different dpkg or gzip cannot fail an unchanged package.
         cur="$(mktemp -d)"; cmp="$(mktemp -d)"
@@ -450,7 +450,8 @@ for entry in "${ARCHIVES[@]}"; do
     if [ -n "$setup_deb" ]; then
         boot="$(basename "$setup_deb")"; boot="$tree/setup/$OS_VERSION/${boot%%_*}.deb"
         mkdir -p "$(dirname "$boot")"
-        cp "$setup_deb" "$boot.tmp" && mv "$boot.tmp" "$boot"
+        cp "$setup_deb" "$boot.tmp"
+        mv "$boot.tmp" "$boot"
         echo "    setup: ${boot#"$DIST"/}"
     fi
 done
