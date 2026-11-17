@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.15.1 (2026-11-17)
+-------------------
+* fix(builder): build packages without their tests (#46)
+
 1.15.0 (2026-11-10)
 -------------------
 * feat(archive): build each product line's setup package (#44)
