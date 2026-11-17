@@ -463,6 +463,9 @@ fi
 
 echo "--- installing build dependencies"
 
+# Without the tests: bloom's rules ignore their result, and a test dependency would gate the build.
+export DEB_BUILD_PROFILES=nocheck
+export DEB_BUILD_OPTIONS="nocheck${DEB_BUILD_OPTIONS:+ $DEB_BUILD_OPTIONS}"
 mk-build-deps --install --remove --tool='apt-get -y -qq --no-install-recommends' debian/control
 if [ "$KIND" = system ] && [ -d /opt/ros ]; then
     echo "FATAL: $PKG is a system package, and installing its build dependencies brought ROS" >&2

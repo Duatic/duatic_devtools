@@ -24,6 +24,9 @@ docker run --rm -it \
 `HOST_UID` and `HOST_GID` are needed on Linux: the container runs as root, so without them the
 `CHANGELOG.rst` written back into the source repository is root-owned.
 
+A package is built with the `nocheck` build profile: its `<test_depend>`s are not installed and
+its tests are neither configured nor run. CI runs them.
+
 `ROSDEP_YAML` is optional, and points at a mapping from ROS package name to Debian package name
 for anything outside the public rosdistro index. Without it such a `<depend>` resolves to nothing,
 and bloom does not treat that as an error. `rosdep/example.yaml` is the format;
