@@ -127,6 +127,10 @@ jobs:
         if: matrix.ros_distro == 'jazzy'
         run: packaging/tests/license_build_test.sh
 
+      - name: Build without the package's tests
+        if: matrix.ros_distro == 'jazzy'
+        run: packaging/tests/test_depend_build_test.sh
+
       - name: Build a system package
         if: matrix.ros_distro == 'jazzy'
         run: packaging/tests/system_build_test.sh
