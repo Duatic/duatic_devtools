@@ -33,7 +33,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cp "$HERE/../archive/publish-gate" "$TMP/publish-gate"
-printf '#!/bin/sh\necho "DISTRO=$DISTRO CHANNEL=$CHANNEL SPECS=$* SET_RELEASE=${SET_RELEASE:-}"\n' > "$TMP/add_and_publish.sh"
+printf '#!/bin/sh\necho "DISTRO=$DISTRO CHANNEL=$CHANNEL SPECS=$* SET_RELEASE=${SET_RELEASE:-} ALLOW_UNDECLARED_ROOT=${ALLOW_UNDECLARED_ROOT:-}"\n' > "$TMP/add_and_publish.sh"
 printf '#!/bin/sh\necho "PROMOTE $1 -> $2 ROOTS=$ROOTS"\n' > "$TMP/promote.sh"
 chmod +x "$TMP/publish-gate" "$TMP/add_and_publish.sh" "$TMP/promote.sh"
 
@@ -98,5 +98,18 @@ gate pass "SET_RELEASE on the key's line does not reach a delivery" "CHANNEL=sta
     "$(request jazzy app:public:1.0)" "DISTROS=jazzy" "CHANNELS=stable" "SET_RELEASE=1" -- public
 gate fail "a set release still checks the root" "this key may not publish into 'products/a'" \
     "SET='product1' $(request jazzy app:products/a:2.0.0)" "DISTROS=jazzy" "SETS=product1" -- public
+
+gate pass "a permitted mirror may go undeclared" "SPECS=ros-lyrical-proxsuite:public:0.8.3-1resolute.20261113.150813 SET_RELEASE= ALLOW_UNDECLARED_ROOT=1" \
+    "MIRROR=1 $(request lyrical ros-lyrical-proxsuite:public:0.8.3-1resolute.20261113.150813)" "DISTROS=lyrical" "MIRRORS=ros-lyrical-proxsuite" -- public
+gate fail "a mirror of a package the key was not given" "this key may not mirror 'ros-lyrical-other'" \
+    "MIRROR=1 $(request lyrical ros-lyrical-other:public:1.0-1)" "DISTROS=lyrical" "MIRRORS=ros-lyrical-proxsuite" -- public
+gate fail "no mirror without MIRRORS" "this key may not mirror 'ros-lyrical-proxsuite'" \
+    "MIRROR=1 $(request lyrical ros-lyrical-proxsuite:public:1.0-1)" "DISTROS=lyrical" -- public
+gate fail "a mirror outside public" "a mirror goes into public, not 'products/a'" \
+    "MIRROR=1 $(request lyrical ros-lyrical-proxsuite:products/a:1.0-1)" "DISTROS=lyrical" "MIRRORS=ros-lyrical-proxsuite" -- public products/a
+gate fail "a mirror cannot be a set release" "a mirror delivers, and cannot be a set release" \
+    "MIRROR=1 SET='product1' $(request lyrical ros-lyrical-proxsuite:public:1.0-1)" "DISTROS=lyrical" "SETS=product1" "MIRRORS=ros-lyrical-proxsuite" -- public
+gate pass "ALLOW_UNDECLARED_ROOT on the key's line does not reach a delivery" "SPECS=app:public:1.0 SET_RELEASE= ALLOW_UNDECLARED_ROOT=" \
+    "$(request jazzy app:public:1.0)" "DISTROS=jazzy" "ALLOW_UNDECLARED_ROOT=1" -- public
 
 exit "$fail"
