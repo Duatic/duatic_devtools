@@ -50,6 +50,11 @@
 # the releases its specs name from stable into that line instead of delivering anything:
 #
 #   command="SETS='product1' ... /usr/local/bin/publish-gate public",...
+#
+# MIRRORS names the upstream packages a key may deliver unchanged into public, which declare no
+# archive root, and a request of MIRROR=1 delivers only those:
+#
+#   command="MIRRORS='ros-lyrical-proxsuite' ... /usr/local/bin/publish-gate public",...
 
 set -euo pipefail
 
@@ -173,5 +178,24 @@ for spec in "${SPECS[@]}"; do
         exit 1
     }
 done
+
+unset ALLOW_UNDECLARED_ROOT
+mirror="$(word_value MIRROR)"
+if [ -n "$mirror" ]; then
+    [ "$mirror" = 1 ] || { echo "FATAL: MIRROR is '$mirror', not 1" >&2; exit 1; }
+    [ -z "$set_line" ] || { echo "FATAL: a mirror delivers, and cannot be a set release" >&2; exit 1; }
+    mirrors="${MIRRORS:-}"
+    for spec in "${SPECS[@]}"; do
+        pkg="${spec%%:*}"; rest="${spec#*:}"; root="${rest%%:*}"
+        case " ${mirrors//,/ } " in
+            *" $pkg "*) ;;
+            *) echo "FATAL: this key may not mirror '$pkg'" >&2
+               echo "  permitted: ${MIRRORS:-none}" >&2
+               exit 1 ;;
+        esac
+        [ "$root" = public ] || { echo "FATAL: a mirror goes into public, not '$root'" >&2; exit 1; }
+    done
+    export ALLOW_UNDECLARED_ROOT=1
+fi
 
 exec "$(dirname "$(readlink -f "$0")")/add_and_publish.sh" "${SPECS[@]}"

@@ -192,6 +192,11 @@ roots, with a request of `PROMOTE=edge:nightly`; such a request delivers nothing
 command="DISTROS='humble jazzy kilted lyrical rolling' CHANNELS='stable edge' PROMOTIONS='edge:nightly' SETS='product1' /usr/local/bin/publish-gate public",restrict ssh-ed25519 AAAA... ci
 ```
 
+`MIRRORS='ros-lyrical-proxsuite'` lists upstream packages a key may deliver unchanged into `public`,
+with a request of `MIRROR=1`. Such a package declares no root, so the gate lets it through without
+one, and only for the names listed. Anything else in the request, or a root other than `public`, is
+refused. `ALLOW_UNDECLARED_ROOT` on the key's line never reaches a delivery.
+
 This is host state. It is not in this repository and is not reviewed when this repository is,
 which is the point: what is being constrained must not be able to edit the constraint. It also
 means a rebuilt host without it fails open, so whatever restores that host has to restore this.
