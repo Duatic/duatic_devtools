@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+1.16.0 (2026-11-19)
+-------------------
+* feat(archive): let a key mirror named upstream packages into public (#48)
+
 1.15.1 (2026-11-17)
 -------------------
 * fix(builder): build packages without their tests (#46)
