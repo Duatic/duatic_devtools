@@ -91,3 +91,32 @@ repos:
       - id: codespell
         args: ['--write-changes', '-L bootup,assertIn,fpr']
         exclude: \.(svg|pyc|drawio)$
+
+  # The ament linters, which need a ROS installation (hence `language: system`). They are
+  # skipped in CI, which runs the `manual` stage only.
+  - repo: local
+    hooks:
+      - id: ament_cppcheck
+        name: ament_cppcheck
+        description: Static code analysis of C/C++ files.
+        stages: [pre-commit]
+        entry: env AMENT_CPPCHECK_ALLOW_SLOW_VERSIONS=1 ament_cppcheck
+        language: system
+        files: \.(h\+\+|h|hh|hxx|hpp|cuh|c|cc|cpp|cu|c\+\+|cxx|tpp|txx)$
+
+      - id: ament_cpplint
+        name: ament_cpplint
+        description: Static code analysis of C/C++ files.
+        stages: [pre-commit]
+        entry: ament_cpplint
+        language: system
+        files: \.(h\+\+|h|hh|hxx|hpp|cuh|c|cc|cpp|cu|c\+\+|cxx|tpp|txx)$
+        args: ["--linelength=120"]
+
+      - id: ament_lint_cmake
+        name: ament_lint_cmake
+        description: Check format of CMakeLists.txt files.
+        stages: [pre-commit]
+        entry: ament_lint_cmake
+        language: system
+        files: CMakeLists.txt$
