@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = ["lxml>=5"]
 
 [project.optional-dependencies]
-dev = ["pyyaml", "pre-commit"]
+dev = ["pyyaml", "pre-commit", "pytest"]
 
 [project.scripts]
 duatic-clang-format = "duatic_clang_format.main:main"

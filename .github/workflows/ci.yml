@@ -128,6 +128,20 @@ jobs:
       - name: Run the exported hooks
         run: pre-commit try-repo . --all-files --hook-stage manual
 
+  hook-tests:
+    needs: changes
+    if: needs.changes.outputs.hooks == 'true'
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'  # the oldest supported (requires-python)
+      - name: Tests
+        run: |
+          pip install -e '.[dev]'
+          pytest -q pre-commit-hooks/tests
+
   # A real bloom-generate and dpkg-buildpackage, producing a real .deb.
   builder:
     needs: changes
