@@ -15,6 +15,7 @@ dev = ["pyyaml", "pre-commit"]
 
 [project.scripts]
 duatic-clang-format = "duatic_clang_format.main:main"
+format-xacro = "duatic_xacro_hooks.format_xacro:main"
 
 [tool.setuptools.packages.find]
 where = ["pre-commit-hooks"]
