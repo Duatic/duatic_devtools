@@ -97,6 +97,13 @@ repos:
   # in the exported manifest (here they need `pip install -e .`).
   - repo: local
     hooks:
+      - id: check-xacro
+        name: check xacro
+        description: Check xacro files (properties, args, blocks, includes, duplicates, ...).
+        entry: check-xacro
+        language: system
+        files: \.xacro$
+
       - id: format-xacro
         name: format xacro
         description: Format xacro files (indentation, line length, attribute order, includes, ...).

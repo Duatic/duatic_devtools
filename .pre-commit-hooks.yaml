@@ -246,6 +246,12 @@
   args: [--write-changes, '-L bootup,assertIn,fpr']
   exclude: \.(svg|pyc|drawio)$
   additional_dependencies: ['git+https://github.com/codespell-project/codespell@v2.3.0']
+- id: check-xacro
+  name: check xacro
+  description: Check xacro files (properties, args, blocks, includes, duplicates, ...).
+  entry: check-xacro
+  language: python
+  files: \.xacro$
 - id: format-xacro
   name: format xacro
   description: Format xacro files (indentation, line length, attribute order, includes, ...).

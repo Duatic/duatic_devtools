@@ -14,6 +14,7 @@ dev = ["pyyaml", "pre-commit"]
 
 [project.scripts]
 format-xacro = "duatic_xacro_hooks.format_xacro:main"
+check-xacro = "duatic_xacro_hooks.check_xacro:main"
 
 [tool.setuptools.packages.find]
 where = ["pre-commit-hooks"]
