@@ -1,5 +1,23 @@
 # Formatter (`format-xacro`)
 
+## Usage
+
+| Option | Meaning |
+|---|---|
+| *(none)* | rewrite the files that change (unchanged files are not touched) |
+| `--check` | change nothing, print `would reformat FILE`, exit 1 if a file would change |
+| `--max-line-length N` | maximum line length, default 100 |
+| `--indent-type space\|tab` | default `space` |
+| `--indent-size N` | columns per level, default 2 (for tabs: the tab width used for the line length) |
+
+| Exit code | Meaning |
+|---|---|
+| 0 | all files formatted / already formatted |
+| 1 | `--check`: at least one file would be reformatted |
+| 2 | at least one file could not be formatted (not well-formed XML, not UTF-8, unreadable); the other files are still processed, the broken one is never written |
+
+Warnings (attribute order not defined for a tag) go to stderr as `file:line: warning: ...` and do not change the exit code.
+
 ## Layout
 
 | Feature | What happens | Example |
@@ -53,11 +71,8 @@
 
 | Feature | What happens |
 |---|---|
-| Order | `<robot>` → `xacro:arg`s → `xacro:include`s → everything else; properties stay where they are |
+| Order | `<robot>` → `xacro:arg`s → everything else (`xacro:include` placement checked by `check-xacro`) |
 | Args | top-level `xacro:arg` are moved right behind `<robot>` (a comment directly above an arg moves with it), original order kept |
-| Includes | each `xacro:include` moves to the top of its own scope, sorted by `filename`; it never leaves its scope, comments stay | |
-| Includes that stay | `filename` containing `${...}` (it may depend on a macro param or property) |
-| Heading comment | a comment behind the root tag that mentions "include" stays above the include group |
 | Header | everything above `<robot>` (XML declaration, license comment, ...) is never formatted, and no declaration is added |
 
 ## What is preserved

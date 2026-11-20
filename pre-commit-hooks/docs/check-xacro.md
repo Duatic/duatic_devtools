@@ -1,6 +1,6 @@
 # Checker (`check-xacro`)
 
-Every check below, in this order. Silence a check with `--disable CODE` or a [`nolint`](#nolint) comment.
+Every check below. The order of the checks does not matter, and the checker does not depend on how a file is formatted. Silence a check with `--disable CODE` or a [`nolint`](#nolint) comment.
 Output: `file:line: code: message`.
 
 **Where the codes are defined:** `CODES` in
@@ -8,6 +8,15 @@ Output: `file:line: code: message`.
 (code and one-line description); `check-xacro --list-codes` prints it, and the tables below explain
 each code. Each code is raised by one function in `duatic_xacro_hooks/checks/`, named
 `check_<topic>`.
+
+## Usage
+
+| Option | Meaning |
+|---|---|
+| `--disable CODE` | do not report this check; repeatable (hard errors cannot be disabled) |
+| `--list-codes` | print all check codes |
+
+Output: `file:line: code: message`. Exit code 1 if anything was reported, else 0. The working directory matters, as included files are only found if they are below it.
 
 ## Hard errors (stop the checks of that file, cannot be silenced)
 
@@ -31,6 +40,7 @@ each code. Each code is raised by one function in `duatic_xacro_hooks/checks/`, 
 | `arg-placement` | `xacro:arg` not at the top level, or `$(arg x)` inside a macro (pass it as a macro param) |
 | `include-without-find` | an `xacro:include` whose filename does not start with `$(find <pkg>)` |
 | `named-include` | an `xacro:include` of a file whose `<robot>` has a `name` (reported at the include; the include has to resolve) |
+| `include-placement` | a static include not at the top of the file (after xacro:args), or an include with `${...}` not at the top of its macro |
 | `library-not-lazy` | a file without a robot `name` (a library) with a top-level element other than `xacro:macro`, `property`, `arg`, `include`: those run at include time. Use `${a if x else b}` in a property instead of `xacro:if` |
 
 ## Properties and params
@@ -64,12 +74,21 @@ Note: `*name` and `**name` both take the next child element, in order; `block-or
 
 | Code | Meaning |
 |---|---|
-| `duplicate-macro` | a macro name defined more than once, always, also with identical signatures, in this file or in a file it includes |
+| `duplicate-macro` | a macro name defined more than once, also with identical signatures: in this file, in a file it includes or in two different included files; reported at the later of the two (the last definition wins) |
 | `duplicate-property` | a property defined twice in the same scope outside `xacro:if`/`unless` (not for `default=` / `scope=`); also across files |
 | `duplicate-arg` | the same `xacro:arg` name twice; also across files |
 | `duplicate-include` | the same file included twice |
 | `empty-macro` | a macro without any element in its body |
+| `mesh-uri` | a `<mesh filename>` in a `<visual>` / `<collision>` that does not start with `package://` (e.g. `file://` is not portable); a value starting with `${...}` is skipped |
 | `origin-rotation` | `<origin>` with both `rpy` and `quat_xyzw` |
+
+## Top-level and library files
+
+A `<robot>` with a `name` marks a **top-level** file (one that is expanded on its own), one without a
+`name` a **library** (one that is only included). xacro discards the `<robot>` attributes of an
+included file, so a name there has no effect. `named-include` and `library-not-lazy` rely on this
+convention. Where an include may be is checked by `include-placement`; a library should only define
+macros, properties, args and includes, so that it does not depend on what its includer defined by then.
 
 ## Which macros a file can see
 
