@@ -12,6 +12,9 @@ dependencies = ["lxml>=5"]
 [project.optional-dependencies]
 dev = ["pyyaml", "pre-commit"]
 
+[project.scripts]
+format-xacro = "duatic_xacro_hooks.format_xacro:main"
+
 [tool.setuptools.packages.find]
 where = ["pre-commit-hooks"]
 include = ["duatic_xacro_hooks*"]
