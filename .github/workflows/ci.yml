@@ -57,10 +57,20 @@ jobs:
               has '^(pre-commit-hooks/|\.pre-commit-config\.yaml$|\.pre-commit-hooks\.yaml$|\.clang-format$|pyproject\.toml$)' && echo "hooks=true" || echo "hooks=false"
           } >> "$GITHUB_OUTPUT"
 
+  # Like Duatic/ci-workflows' pre-commit.yml, but with this package installed first: the local
+  # format-xacro / check-xacro hooks run its console scripts (`language: system`).
   format:
-    uses: Duatic/ci-workflows/.github/workflows/pre-commit.yml@v2
-    with:
-      runner: ${{ inputs.runner || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install the xacro hooks
+        run: pip install .
+      - uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: --all-files --hook-stage manual
 
   # Every script, every time one of them changes.
   lint:
