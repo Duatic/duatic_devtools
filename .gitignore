@@ -27,3 +27,4 @@ packaging/builder/gnupg/
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
