@@ -177,6 +177,17 @@ def canonical_params(params: str | None) -> list[str]:
     return [name + (":=" if op else "") + default for name, op, default in _parse_params(params)]
 
 
+def display_path(path: Path) -> str:
+    """The path of a file as shown in messages: relative to the working directory if it is below it.
+
+    :param path: the file
+    :returns: the relative path, or the path as given
+    """
+    resolved = path.resolve()
+    cwd = Path.cwd()
+    return str(resolved.relative_to(cwd)) if resolved.is_relative_to(cwd) else str(path)
+
+
 class UnreadableFile(Exception):
     """A file that cannot be read as UTF-8; the message is the reason."""
 

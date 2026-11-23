@@ -45,12 +45,13 @@ from duatic_xacro_hooks.checks.names import check_args, check_unused_params
 from duatic_xacro_hooks.checks.source import (
     check_declaration,
     check_include_find,
+    check_include_placement,
     check_library,
     check_origins,
     collect_directives,
     parse_strict,
 )
-from duatic_xacro_hooks.common import UnreadableFile, read_utf8, suppresses
+from duatic_xacro_hooks.common import UnreadableFile, display_path, read_utf8, suppresses
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -63,6 +64,7 @@ def check_text(
     disable: Sequence[str] = (),
     macros: Registry | None = None,
     path: str = "",
+    brought: Sequence[tuple[int, str, Registry]] = (),
     extra: Sequence[Issue] = (),
 ) -> list[Issue]:
     """Run all checks on the text of one xacro file.
@@ -71,6 +73,7 @@ def check_text(
     :param disable: codes of the checks to skip
     :param macros: macro definitions of other files (see `load_registry`), used to check macro calls
     :param path: name of the file, stored in the macro definitions
+    :param brought: (line, filename, macros) of each include of the file, used to find duplicate macros
     :param extra: issues found outside of the text (e.g. in the files it includes), still subject to `nolint` and `disable`
     :returns: the issues, sorted by line and code
     """
@@ -90,12 +93,13 @@ def check_text(
             check_args(root)
             + check_blocks(root, registry)
             + check_include_find(root)
+            + check_include_placement(root)
             + check_library(root)
             + check_origins(root)
             + check_empty_macros(root)
             + check_unused_params(root, registry)
             + check_calls(root, registry)
-            + check_duplicates(root, registry, path)
+            + check_duplicates(root, brought, path)
         )
     )
 
@@ -169,22 +173,21 @@ def main(argv: list[str] | None = None) -> int:
         try:
             _, text = read_utf8(path)
         except UnreadableFile as e:
-            print(f"{path}:1: parse-error: {e}")
+            print(f"{display_path(path)}:1: parse-error: {e}")
             found += 1
             continue
 
         registry = includes.registry_of(path)
-        resolved = path.resolve()
-        shown = resolved.relative_to(cwd) if resolved.is_relative_to(cwd) else resolved
 
         for issue in check_text(
             text,
             args.disable,
             registry,
-            str(shown),
+            includes.uri(path),
+            includes.brought_macros(path),
             includes.named_includes(path) + includes.duplicates(path),
         ):
-            print(f"{path}:{issue.line}: {issue.code}: {issue.message}")
+            print(f"{display_path(path)}:{issue.line}: {issue.code}: {issue.message}")
             found += 1
     return 1 if found else 0
 

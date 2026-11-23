@@ -79,7 +79,6 @@ class ParsedFile:
 
     # for the cross-file duplicates: what the file defines and includes at its top level, outside
     # of macros and `xacro:if` / `unless` (("property" / "arg", name) -> first line; (line, file))
-    shown: str = ""
     definitions: dict[tuple[str, str], int] = field(default_factory=dict)
     top_includes: list[tuple[int, Path]] = field(default_factory=list)
 
@@ -94,6 +93,23 @@ class IncludeIndex:
         """
         self.packages = packages
         self._files: dict[Path, ParsedFile] = {}  # cache
+
+    def uri(self, path: Path) -> str:
+        """The name of a file in messages: `package://<package>/<path inside it>`.
+
+        :param path: the file
+        :returns: the name, or the path relative to the working directory if it is in no package
+        """
+        path = path.resolve()
+        best = max(
+            (p for p in self.packages.items() if path.is_relative_to(p[1])),
+            key=lambda p: len(p[1].parts),
+            default=None,
+        )
+        if best:
+            return f"package://{best[0]}/{path.relative_to(best[1])}"
+        cwd = Path.cwd()
+        return str(path.relative_to(cwd) if path.is_relative_to(cwd) else path)
 
     def resolve(self, filename: str, including: Path) -> Path | None:
         """The file that an `xacro:include` refers to.
@@ -130,13 +146,8 @@ class IncludeIndex:
 
             parsed = ParsedFile()
             if root is not None:
-                # path as shown in messages: relative to the working directory if possible
-                cwd = Path.cwd()
-                shown = path.relative_to(cwd) if path.is_relative_to(cwd) else path
-                parsed.macros = collect_macros(root, None, str(shown))
+                parsed.macros = collect_macros(root, None, self.uri(path))
                 parsed.robot_name = root.get("name") if tag_name(root) == "robot" else None
-
-                parsed.shown = str(shown)
 
                 # includes that can be resolved; properties (not `default=` / `scope=`, like
                 # `duplicate-property`) and args at the top level
@@ -193,6 +204,21 @@ class IncludeIndex:
                 registry.setdefault(name, []).extend(definitions)
         return registry
 
+    def brought_macros(self, path: Path) -> list[tuple[int, str, Registry]]:
+        """The macros that each include of a file brings in, directly or through other includes.
+
+        :param path: the file
+        :returns: (line of the include, its filename, macro name -> definitions) per include
+        """
+        brought = []
+        for line, filename, target in self._read(path.resolve()).include_lines:
+            registry: Registry = {}
+            for file in self._closure(target):
+                for name, definitions in file.macros.items():
+                    registry.setdefault(name, []).extend(definitions)
+            brought.append((line, filename, registry))
+        return brought
+
     def named_includes(self, path: Path) -> list[Issue]:
         """The includes of a file whose target has a robot name (`named-include`).
 
@@ -227,8 +253,8 @@ class IncludeIndex:
         own = path.resolve()
 
         def where(f: Path, key: tuple[str, str]) -> str:
-            """`file:line` of a definition, as shown in messages."""
-            return f"{self._read(f).shown}:{self._read(f).definitions[key]}"
+            """`package://...:line` of a definition."""
+            return f"{self.uri(f)}:{self._read(f).definitions[key]}"
 
         # in line order: the own definitions, and what each include brings (key -> files)
         sources: list[tuple[int, dict[tuple[str, str], set[Path]]]] = [

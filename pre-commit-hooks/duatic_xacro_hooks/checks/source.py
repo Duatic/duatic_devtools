@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 
 from lxml import etree
 
-from duatic_xacro_hooks.checks.model import Issue, children, elements, tag_name
+from duatic_xacro_hooks.checks.model import Issue, children, elements, enclosing_macro, tag_name
 from duatic_xacro_hooks.common import parse_nolint
 
 if TYPE_CHECKING:
@@ -149,6 +149,41 @@ def check_include_find(root: Element) -> list[Issue]:
 
 
 LAZY_TOP_LEVEL = {"xacro:macro", "xacro:property", "xacro:arg", "xacro:include"}
+
+
+def check_include_placement(root: Element) -> list[Issue]:
+    """Where an include may be (`include-placement`): an include with a static filename at the top of
+    the file, after xacro:args (only args and other includes above it), one with `${...}` at the top of its macro
+    (only other includes above it). Includes with `${...}` outside of a macro are not checked.
+
+    :param root: root element of the file
+    :returns: the issues found
+    """
+    issues = []
+    for el in elements(root):
+        if tag_name(el) != "xacro:include":
+            continue
+        variable = "${" in (el.get("filename") or "")
+        parent = el.getparent()
+        if variable:
+            scope = enclosing_macro(el)
+            if scope is None:
+                continue
+            ok_before, where = {"xacro:include"}, "the top of its macro"
+            ok = parent is scope
+        else:
+            ok_before, where = {
+                "xacro:include",
+                "xacro:arg",
+            }, "the top of the file (after xacro:args)"
+            ok = parent is root
+        before = {tag_name(s) for s in el.itersiblings(preceding=True) if tag_name(s)}
+        if not ok or not before <= ok_before:
+            kind = "variable" if variable else "static"
+            issues.append(
+                Issue(el.sourceline, "include-placement", f"{kind} include must be at {where}")
+            )
+    return issues
 
 
 def check_library(root: Element) -> list[Issue]:

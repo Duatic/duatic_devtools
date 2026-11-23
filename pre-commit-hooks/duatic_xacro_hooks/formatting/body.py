@@ -21,7 +21,7 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""The body below the root tag: blank lines, comments, macro calls, args and includes."""
+"""The body below the root tag: blank lines, comments, macro calls and args."""
 
 from __future__ import annotations
 
@@ -251,96 +251,15 @@ def is_macro_def_start(line: str) -> bool:
     return re.match(r"\s*<xacro:macro[\s>]", line) is not None
 
 
-def include_key(line: str) -> str:
-    """Sort key of an include line: its filename.
-
-    Examples::
-
-        >>> include_key('  <xacro:include filename="a.xacro"/>')
-        'a.xacro'
-
-    :param line: line with an `xacro:include`
-    :returns: the filename, empty if there is none
-    """
-    m = re.search(r'filename="([^"]*)"', line)
-    return m.group(1) if m else ""
-
-
-def scope_of(lines: list[str], idx: int, in_comment: set[int]) -> int:
-    """Index of the line that opens the element containing line `idx` (0 for the root tag).
-
-    Examples::
-
-        >>> scope_of(["<robot>", "  <xacro:macro>", "    <a/>", "  </xacro:macro>"], 2, set())
-        1
-
-    :param lines: lines of the body, one element per line
-    :param idx: index of the line
-    :param in_comment: indexes of the comment lines (they carry no structure)
-    :returns: the index of the opening tag line
-    """
-    col = indent_of(lines[idx])
-    for j in range(idx - 1, -1, -1):
-        if j not in in_comment and lines[j].strip() and indent_of(lines[j]) < col:
-            return j
-    return 0
-
-
-def place_includes(lines: list[str], idxs: list[int], pos: int) -> None:
-    """Move the include lines `idxs` (all in one scope) to `pos`, sorted by filename.
-    A comment block at `pos` that mentions "include" stays above them.
-
-    :param lines: lines of the body, changed in place
-    :param idxs: indexes of the include lines
-    :param pos: index of the first line of the scope body (behind its opening tag)
-    """
-    pad = lines[idxs[0]][: indent_of(lines[idxs[0]])]
-    includes = [pad + lines[i].strip() for i in sorted(idxs, key=lambda i: include_key(lines[i]))]
-
-    # the comments at `pos` are a heading of the includes if an include follows them directly (and
-    # not just something that ended up behind them once the includes are lifted out)
-    start_to_end = {s: e for s, e in comment_ranges(lines)}
-    end = pos
-    while end in start_to_end:
-        end = start_to_end[end] + 1
-    is_heading = (
-        end > pos and end in idxs and re.search(r"include", "\n".join(lines[pos:end]), re.I)
-    )
-
-    for i in sorted(idxs, reverse=True):
-        del lines[i]
-
-    # a heading comment stays above the include group
-    at = end if is_heading else pos
-    lines[at:at] = includes
-
-
-def move_args_and_includes(lines: list[str], indent: str) -> None:
-    """Order behind the root tag: top-level `xacro:arg` (with the comment directly above), then the
-    top-level `xacro:include` statements sorted by filename, without blank lines in between.
-    Includes inside a macro or `xacro:if` go to the top of that element, sorted the same way; they
-    never leave their scope. Includes whose filename depends on `${...}` stay where they are.
-    Properties are not touched.
+def move_args(lines: list[str], indent: str) -> None:
+    """Move the top-level `xacro:arg` statements (with the comment directly above) right behind the
+    root tag, in their original order. Includes and properties are not touched (see the
+    `include-placement` check of `check-xacro`).
 
     :param lines: lines of the body, changed in place
     :param indent: indentation of the top level
     """
     arg_re = re.compile(rf"{indent}<xacro:arg[\s/>]")
-    inc_re = re.compile(r"\s*<xacro:include[\s/>]")
-
-    def scopes() -> dict[int, list[int]]:
-        """Include lines to move, by the line that opens their scope.
-
-        :returns: scope line index -> include line indexes
-        """
-        in_comment = {i for s, e in comment_ranges(lines) for i in range(s, e + 1)}
-        groups: dict[int, list[int]] = {}
-        for i, line in enumerate(lines):
-            if i > 0 and i not in in_comment and inc_re.match(line) and "${" not in line:
-                groups.setdefault(scope_of(lines, i, in_comment), []).append(i)
-        return groups
-
-    # top-level args (with their comment) go right behind the root tag
     in_comment = {i for s, e in comment_ranges(lines) for i in range(s, e + 1)}
     arg_ranges = [
         (comment_block_start(lines, i), i)
@@ -351,16 +270,6 @@ def move_args_and_includes(lines: list[str], indent: str) -> None:
     for start, end in sorted(arg_ranges, reverse=True):
         del lines[start : end + 1]
     lines[1:1] = args
-
-    # includes, scope by scope from top to bottom; the scopes are looked up again after every move
-    done = -1
-    while True:
-        later = [p for p in scopes() if p > done]
-        if not later:
-            break
-        done = min(later)
-        pos = done + 1 + (len(args) if done == 0 else 0)
-        place_includes(lines, scopes()[done], pos)
 
 
 BLOCK_SCOPES = {"xacro:macro", "xacro:if", "xacro:unless"}  # the root's children are blocks too
@@ -448,7 +357,7 @@ def block_spacing(lines: list[str], in_comment: set[int]) -> tuple[set[int], set
 
 
 def format_body(text: str, max_len: int, indent_size: int = 2, indent_type: str = "space") -> str:
-    """Format everything below the root tag: blank lines, macro calls, comments, args, includes and tag wrapping.
+    """Format everything below the root tag: blank lines, macro calls, comments, args and tag wrapping.
 
     :param text: XML text with one element per line, starting at the root tag
     :param max_len: maximum line length
@@ -466,7 +375,7 @@ def format_body(text: str, max_len: int, indent_size: int = 2, indent_type: str 
 
     unit = " " * indent_size  # lines are handled with space indentation, tabs come last
     reformat_comments(lines, indent_size, max_len)
-    move_args_and_includes(lines, unit)
+    move_args(lines, unit)
 
     # columns of every comment line, and where each comment block starts
     ranges = comment_ranges(lines)

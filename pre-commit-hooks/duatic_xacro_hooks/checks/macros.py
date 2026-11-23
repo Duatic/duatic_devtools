@@ -46,7 +46,7 @@ from duatic_xacro_hooks.checks.model import (
 from duatic_xacro_hooks.common import is_macro_call
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Iterable, Iterator, Sequence
 
     from duatic_xacro_hooks.checks.model import Element, Registry
 
@@ -121,31 +121,64 @@ def collect_macros(root: Element, registry: Registry | None = None, path: str = 
     return registry
 
 
-def check_duplicates(root: Element, registry: Registry, path: str = "") -> list[Issue]:
+def check_duplicates(
+    root: Element,
+    brought: Sequence[tuple[int, str, Registry]] = (),
+    path: str = "",
+) -> list[Issue]:
     """Macros, properties, args and includes that are defined more than once (`duplicate-*`).
 
     :param root: root element of the file
-    :param registry: macro definitions of all known files
-    :param path: name of the file, to tell its macros from others
+    :param brought: (line, filename, macros) of each include of the file, see `brought_macros`
+    :param path: name of the file, stored in the macro definitions
     :returns: the issues found
     """
     issues = []
 
-    # macros: always, even with identical signatures, in this file or any other known file
-    for el in elements(root):
-        if tag_name(el) != "xacro:macro" or not el.get("name"):
-            continue
-        for other in registry.get(el.get("name"), []):
-            if (other.path, other.line) == (path, el.sourceline):
-                continue
-            where = f"line {other.line}" if other.path == path else f"{other.path}:{other.line}"
-            issues.append(
-                Issue(
-                    el.sourceline,
-                    "duplicate-macro",
-                    f"macro '{el.get('name')}' is also defined in {where}",
-                )
+    # macros: two of this file are both reported
+    own = [
+        (el.sourceline, el.get("name"))
+        for el in elements(root)
+        if tag_name(el) == "xacro:macro" and el.get("name")
+    ]
+    for line, name in own:
+        issues += [
+            Issue(
+                line,
+                "duplicate-macro",
+                f"{path}:{other} and {path}:{line} both define macro '{name}'",
             )
+            for other, other_name in own
+            if other_name == name and other != line
+        ]
+
+    # macros of this file and of its includes: the last definition wins in xacro, so a duplicate is
+    # reported at the later of the two (its own macro or its include); a file reached twice is no
+    # duplicate
+    sources: list[tuple[int, str, dict[str, set[tuple[str, int]]]]] = [
+        (line, "", {name: {(path, line)}}) for line, name in own
+    ] + [
+        (line, filename, {n: {(d.path, d.line) for d in ds} for n, ds in registry.items()})
+        for line, filename, registry in brought
+    ]
+    earliest: dict[str, tuple[str, int]] = {}
+    for line, filename, defined in sorted(sources, key=lambda s: s[0]):
+        for name, sites in sorted(defined.items()):
+            if name not in earliest:
+                earliest[name] = min(sites)
+            elif earliest[name] not in sites and not (not filename and earliest[name][0] == path):
+                before = earliest[name]
+                here = min(sites)
+                # two files that the checked one brings together, or the checked file and another
+                importer = "" if path in (before[0], here[0]) else f" (both imported by {path})"
+                issues.append(
+                    Issue(
+                        line,
+                        "duplicate-macro",
+                        f"{before[0]}:{before[1]} and {here[0]}:{here[1]} "
+                        f"both define macro '{name}'{importer}",
+                    )
+                )
 
     # properties: same scope (macro or robot level), unconditional, no default/scope attribute
     seen: dict = {}

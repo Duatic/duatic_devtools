@@ -31,7 +31,13 @@ from pathlib import Path
 from duatic_xacro_hooks.formatting.body import format_body, mark_eol_comments
 from duatic_xacro_hooks.formatting.layout import XmlError, pretty_print, root_start
 from duatic_xacro_hooks.formatting.tags import ATTRIBUTE_ORDER, check_attribute_orders
-from duatic_xacro_hooks.common import UnreadableFile, parse_nolint, read_utf8, suppresses
+from duatic_xacro_hooks.common import (
+    UnreadableFile,
+    display_path,
+    parse_nolint,
+    read_utf8,
+    suppresses,
+)
 
 
 def format_text(
@@ -113,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             raw, text = read_utf8(path)
         except UnreadableFile as e:
-            print(f"{path}: error: {e}", file=sys.stderr)
+            print(f"{display_path(path)}: error: {e}", file=sys.stderr)
             status = 2
             continue
 
@@ -125,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.max_line_length,
                 args.indent_size,
                 args.indent_type,
-                label=str(path),
+                label=display_path(path),
             )
         except XmlError as e:
             print(e, file=sys.stderr)
@@ -138,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         data = text.encode("utf-8")
         if args.check:
             if data != raw:
-                print(f"would reformat {path}", file=sys.stderr)
+                print(f"would reformat {display_path(path)}", file=sys.stderr)
                 status = max(status, 1)
         elif data != raw:  # untouched files keep their modification time
             path.write_bytes(data)
