@@ -239,6 +239,35 @@ def check_declaration(text: str) -> list[Issue]:
     return []
 
 
+def check_mesh_uris(root: Element) -> list[Issue]:
+    """The `filename` of a `<mesh>` in a `<visual>` or `<collision>` must start with `package://`
+    (`mesh-uri`): `file://` and plain paths only work on one machine. A value that starts with
+    `${...}` is not known here and is skipped.
+
+    :param root: root element of the file
+    :returns: the issues found
+    """
+    issues = []
+    for el in elements(root):
+        filename = el.get("filename")
+        if tag_name(el) != "mesh" or filename is None or filename.startswith("${"):
+            continue
+        # <mesh> directly inside <geometry>, which is inside <visual> or <collision>
+        geometry = el.getparent()
+        shape = geometry.getparent() if geometry is not None else None
+        if geometry is None or shape is None:
+            continue
+        if tag_name(geometry) != "geometry" or tag_name(shape) not in ("visual", "collision"):
+            continue
+        if not filename.startswith("package://"):
+            issues.append(
+                Issue(
+                    el.sourceline, "mesh-uri", f"mesh '{filename}' does not start with package://"
+                )
+            )
+    return issues
+
+
 def check_origins(root: Element) -> list[Issue]:
     """`<origin>` with both `rpy` and `quat_xyzw` (`origin-rotation`).
 

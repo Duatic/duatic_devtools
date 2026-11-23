@@ -47,6 +47,7 @@ from duatic_xacro_hooks.checks.source import (
     check_include_find,
     check_include_placement,
     check_library,
+    check_mesh_uris,
     check_origins,
     collect_directives,
     parse_strict,
@@ -95,6 +96,7 @@ def check_text(
             + check_include_find(root)
             + check_include_placement(root)
             + check_library(root)
+            + check_mesh_uris(root)
             + check_origins(root)
             + check_empty_macros(root)
             + check_unused_params(root, registry)

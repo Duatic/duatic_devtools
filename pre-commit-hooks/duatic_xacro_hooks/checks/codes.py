@@ -38,6 +38,7 @@ CODES: dict[str, str] = {
     "include-placement": "static include not at the top of the file (after xacro:args), or an include with `${...}` not at the top of its macro",
     "library-not-lazy": "file without a robot name (a library) with top-level content that is not a macro, property, arg or include",
     "named-include": "`xacro:include` of a file whose `<robot>` has a `name` (only top-level files are named)",
+    "mesh-uri": "`<mesh filename>` in a `<visual>` / `<collision>` that does not start with `package://` (e.g. `file://`)",
     "origin-rotation": "`<origin>` with both `rpy` and `quat_xyzw`",
     "xml-declaration": 'file does not start with an XML declaration (`<?xml version="1.0"?>`)',
     "xml-encoding": "declared encoding is not UTF-8 (xacro only reads UTF-8)",
