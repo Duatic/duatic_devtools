@@ -68,8 +68,8 @@ repos:
       - id: ament_lint_cmake
 ```
 
-Leave out the hooks a repository does not need. Some options are fixed (the black line length, LF
-line endings, the C++ style); others are defaults that a repository's `args:` replaces completely.
+Every hook ships with entry arguments that enforce the Duatic style (the black line length, LF line endings, the C++ style).
+A repository can still override them by overriding `args` (or `entry`; discouraged) in its own `.pre-commit-config.yaml`.
 The header of `.pre-commit-hooks.yaml` shows how.
 
 `CONTRIBUTING.md` covers installing and running pre-commit. CI runs the same configuration through
