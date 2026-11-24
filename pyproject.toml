@@ -2,17 +2,23 @@
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
-# pre-commit installs a hook repository with `pip install .`, so the hooks exported in
-# .pre-commit-hooks.yaml need this repository to be an installable (here: empty) package.
 [project]
 name = "duatic-devtools-hooks"
 version = "0.1.0"
-description = "Duatic pre-commit hooks (the shared linters)"
+description = "Duatic pre-commit hooks (shared and custom)"
+readme = "pre-commit-hooks/README.md"
 requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
 dev = ["pyyaml", "pre-commit"]
 
-[tool.setuptools]
-packages = []
+[project.scripts]
+duatic-clang-format = "duatic_clang_format.main:main"
+
+[tool.setuptools.packages.find]
+where = ["pre-commit-hooks"]
+include = ["duatic_clang_format*"]
+
+[tool.setuptools.data-files]
+"share/duatic_devtools_hooks" = [".clang-format"]

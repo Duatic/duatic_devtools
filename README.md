@@ -75,14 +75,12 @@ The header of `.pre-commit-hooks.yaml` shows how.
 `CONTRIBUTING.md` covers installing and running pre-commit. CI runs the same configuration through
 the pre-commit workflow of `Duatic/ci-workflows`.
 
-`.clang-format` is the C++ style. The `clang-format` hook carries it inline, so repositories need no
-copy. To use the style in an editor or with a plain `clang-format` call, copy it into the repository
-root; the hook ignores that copy:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Duatic/duatic_devtools/main/.clang-format \
-  -o .clang-format
-```
+`.clang-format` is the C++ style. The `clang-format` hook installs the one of its `rev` into the root
+of the repository, then runs clang-format as usual, so editors and plain `clang-format` calls use the
+same style. The hook also runs when `.clang-format` or `.pre-commit-config.yaml` change: a `rev` bump
+updates the file, and a local edit is reverted. It overwrites an existing `.clang-format` and fails
+once when it does, to allow staging the file. The hook always formats with the packaged style, so a
+`.clang-format` in a subdirectory is ignored, on purpose, to enforce one common style.
 
 To change a hook, edit `.pre-commit-config.yaml`, run `pre-commit-hooks/generate_hooks.py` (needs
 `pip install -e '.[dev]'`) and commit both files. CI fails if they disagree.

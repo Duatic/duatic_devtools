@@ -28,8 +28,6 @@
 from __future__ import annotations
 
 import argparse
-import json
-import re
 import shlex
 import tomllib
 from pathlib import Path
@@ -101,48 +99,22 @@ yaml.add_representer(
 )
 
 
-def embed_clang_format_style(hook: Hook) -> None:
-    """Replace ``-style=file`` of the clang-format hook by the content of our ``.clang-format``.
+def use_packaged_clang_format(hook: Hook) -> None:
+    """Turn the clang-format hook into our wrapper, which installs our ``.clang-format``.
 
-    clang-format would otherwise read the ``.clang-format`` of the consumer's repository, and a
-    path to our file cannot be given: the hook runs in the consumer's repository, and ``entry`` is
-    not expanded by a shell.
+    The upstream hook would read the ``.clang-format`` of the consumer's repository. The wrapper
+    copies ours (of the same revision as the hook) into the consumer's repository root first.
 
-    :param hook: the hook to change in place; the style is passed inline, as a YAML flow mapping
+    :param hook: the hook to change in place
     """
+    hook["entry"] = "duatic-clang-format --install-style-file"
 
-    def unquote(string: re.Match[str]) -> str:
-        """Drop the quotes of a JSON string if YAML does not need them, else keep them.
+    # The wrapper sets the style itself, and upstream `-style=file` in `args` is redundant
+    hook["args"] = [arg for arg in hook.get("args", []) if arg != "-style=file"]
 
-        :param string: a double-quoted JSON string
-        :returns: the text without quotes if that is safe, else the quoted string unchanged
-        """
-        text = string[1]
-        try:
-            # true/false: clang-format reads the string and the boolean the same. A backslash is
-            # a JSON escape. A flow sequence is the strictest context for a plain scalar.
-            plain = text in ("true", "false") or (
-                "\\" not in text and yaml.safe_load(f"[{text}]") == [text]
-            )
-        except yaml.YAMLError:
-            plain = False
-        return text if plain else string[0]
-
-    # JSON is YAML in flow style, and json.dumps indents it (YAML's own flow style does not)
-    style = json.dumps(yaml.safe_load((ROOT / ".clang-format").read_text()), indent=2)
-    inline = re.sub(r'"((?:[^"\\]|\\.)*)"', unquote, style)
-
-    arguments = [
-        f"-style={inline}" if a == "-style=file" else a for a in shlex.split(hook["entry"])
-    ]
-    hook["entry"] = shlex.join(arguments)
-
-    # The `args` come after the `entry`, so an upstream `-style=file` there would win again
-    args = [arg for arg in hook.get("args", []) if arg != "-style=file"]
-    if args:
-        hook["args"] = args
-    else:
-        hook.pop("args", None)
+    # Also run on the files that decide the style, to install or restore it
+    hook.pop("types_or", None)  # Remove to avoid style files to be removed
+    hook["files"] = rf"({hook['files']})|^\.clang-format$|^\.pre-commit-config\.yaml$"
 
 
 def remote_hook(hook: Hook, repo: str, rev: str, store: Store) -> Hook:
@@ -169,7 +141,7 @@ def remote_hook(hook: Hook, repo: str, rev: str, store: Store) -> Hook:
         out["additional_dependencies"] = dependencies
 
     if out["id"] == "clang-format":
-        embed_clang_format_style(out)
+        use_packaged_clang_format(out)
     return out
 
 
