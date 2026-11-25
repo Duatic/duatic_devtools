@@ -125,8 +125,11 @@ jobs:
           git diff --exit-code -- .pre-commit-hooks.yaml \
             || { echo "::error::.pre-commit-hooks.yaml differs from generate_hooks.py, run it and commit the result"; exit 1; }
 
+      # not the formatter test cases, as they are purposefully messy
       - name: Run the exported hooks
-        run: pre-commit try-repo . --all-files --hook-stage manual
+        run: |
+          mapfile -t files < <(git ls-files | grep -v '^pre-commit-hooks/tests/format_cases/')
+          pre-commit try-repo . --hook-stage manual --files "${files[@]}"
 
   hook-tests:
     needs: changes
