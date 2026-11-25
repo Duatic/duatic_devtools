@@ -50,9 +50,14 @@ CODES: dict[str, str] = {
     "duplicate-include": "the same file included twice",
     "duplicate-param": "macro param name used twice",
     "nolint-placement": "`nolint` that has no effect (only above <robot> or at a line end works)",
+    "nolint-unknown-code": "`nolint: code` with a code that no check has, or that cannot be silenced (hard errors); it silences nothing",
     "parse-error": "file is not well-formed XML (hard error: cannot be disabled or silenced)",
     "unbound-prefix": "namespace prefix used without xmlns declaration, e.g. xacro: or gz: (hard error)",
 }
+
+
+# the codes of warnings of the formatter, which a nolint may name as well
+FORMATTER_CODES: set[str] = {"attribute-order"}
 
 
 HARD_ERRORS: set[str] = {

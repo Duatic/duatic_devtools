@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 
 from lxml import etree
 
+from duatic_xacro_hooks.checks.codes import CODES, FORMATTER_CODES, HARD_ERRORS
 from duatic_xacro_hooks.checks.model import Issue, children, elements, enclosing_macro, tag_name
 from duatic_xacro_hooks.common import parse_nolint
 
@@ -92,12 +93,32 @@ def collect_directives(
     per_line: dict[int, list[frozenset[str]]] = {}
     issues: list[Issue] = []
 
+    def unknown(line: int, codes: frozenset[str]) -> None:
+        """Report the codes of a nolint that no check has, or that cannot be silenced.
+
+        :param line: line of the comment
+        :param codes: codes of the nolint
+        """
+        for code in sorted(codes - set(CODES) - FORMATTER_CODES):
+            issues.append(
+                Issue(
+                    line, "nolint-unknown-code", f"nolint names '{code}', which is not a check code"
+                )
+            )
+        for code in sorted(codes & HARD_ERRORS):
+            issues.append(
+                Issue(
+                    line, "nolint-unknown-code", f"nolint names '{code}', which cannot be silenced"
+                )
+            )
+
     # file-level nolint: comments above the root element
     for comment in root.itersiblings(preceding=True):
         if comment.tag is etree.Comment:
             is_nolint, codes = parse_nolint(comment.text or "")
             if is_nolint:
                 file_level.append(codes)
+                unknown(comment.sourceline - (comment.text or "").count("\n"), codes)
 
     # comments inside the root: find the line they start in and whether they trail a line
     for comment in root.iter(etree.Comment):
@@ -108,6 +129,8 @@ def collect_directives(
         idx = line.find("<!--") if idx < 0 else idx
         at_eol = line[:idx].strip() != ""
         is_nolint, codes = parse_nolint(text)
+        if is_nolint:
+            unknown(start, codes)
 
         # an end-of-line nolint covers its line; nolint elsewhere does nothing (the formatter moves
         # other trailing comments)

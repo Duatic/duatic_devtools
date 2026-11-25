@@ -32,6 +32,7 @@ Output: `file:line: code: message`. Exit code 1 if anything was reported, else 0
 | `xml-declaration` | the file does not start with an XML declaration |
 | `xml-encoding` | a declared `encoding` is not `UTF-8` (xacro ignores the declaration and always reads UTF-8) |
 | `nolint-placement` | a `nolint` comment that has no effect |
+| `nolint-unknown-code` | a `nolint: code` with a code that no check has, or one that cannot be silenced (`parse-error`, `unbound-prefix`) |
 
 ## Args and includes
 
@@ -129,6 +130,16 @@ structure rules.
 | `<tag .../>  <!-- nolint -->` | at the **end of a line** | silences every check for that tag (its first line too if the tag spans lines) |
 | `<tag .../>  <!-- nolint: code-a -->` | at the end of a line | silences only these codes for that tag |
 | `nolint` anywhere else | own line in the body | no effect, reported as `nolint-placement` |
+| `nolint: code` with a code no check has, or a hard error | anywhere | silences nothing, reported as `nolint-unknown-code` |
 
-`NoLint`, `NOLINT` and spaces around codes are fine. The formatter keeps an end-of-line `nolint` at
-the end of its line (also when the tag is wrapped, moved or reordered).
+The keyword is case-insensitive (`NoLint`, `NOLINT`), the codes are not (`mesh-uri`, not `Mesh-URI`);
+spaces around the codes are fine. A `nolint` without codes silences every check, one with several
+codes silences all of them. At the end of a line it covers the tag on that line (the whole tag if it
+spans several lines), not the elements inside it.
+
+Only the hard errors (`parse-error`, `unbound-prefix`) cannot be silenced, by neither `nolint` nor
+`--disable`. A `nolint` may also name `attribute-order`, the warning of the formatter.
+
+The formatter keeps an end-of-line `nolint` at the end of its line (also when the tag is wrapped,
+moved or reordered). Several of them behind one line become a single one with the union of their
+codes (a `nolint` without codes wins). Any other comment behind the line moves above it.
