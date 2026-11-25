@@ -37,7 +37,7 @@ Output: `file:line: code: message`. Exit code 1 if anything was reported, else 0
 
 | Code | Meaning |
 |---|---|
-| `arg-placement` | `xacro:arg` not at the top level, or `$(arg x)` inside a macro (pass it as a macro param) |
+| `arg-placement` | `xacro:arg` not at the top of the file (only other args above it), or `$(arg x)` inside a macro (pass it as a macro param) |
 | `include-without-find` | an `xacro:include` whose filename does not start with `$(find <pkg>)` |
 | `named-include` | an `xacro:include` of a file whose `<robot>` has a `name` (reported at the include; the include has to resolve) |
 | `include-placement` | a static include not at the top of the file (after xacro:args), or an include with `${...}` not at the top of its macro |

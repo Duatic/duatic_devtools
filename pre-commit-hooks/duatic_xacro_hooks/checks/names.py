@@ -144,7 +144,8 @@ def free_names(expr: str) -> set[str]:
 
 
 def check_args(root: Element) -> list[Issue]:
-    """Where `xacro:arg` and `$(arg ...)` may be used (`arg-placement`).
+    """Where `xacro:arg` and `$(arg ...)` may be used (`arg-placement`): declarations at the top
+    of the file (only other args above them), substitutions not inside macros.
 
     :param root: root element of the file
     :returns: the issues found
@@ -153,16 +154,27 @@ def check_args(root: Element) -> list[Issue]:
     for el in elements(root):
         macro = enclosing_macro(el)
 
-        # declarations only at top level
-        if tag_name(el) == "xacro:arg" and el.getparent() is not root:
-            where = f"macro '{macro.get('name')}'" if macro is not None else "a nested tag"
-            issues.append(
-                Issue(
-                    el.sourceline,
-                    "arg-placement",
-                    f"xacro:arg inside {where}, declare it at top level",
+        # declarations only at top level, behind the root tag and above anything but other args
+        if tag_name(el) == "xacro:arg":
+            if el.getparent() is not root:
+                where = f"macro '{macro.get('name')}'" if macro is not None else "a nested tag"
+                issues.append(
+                    Issue(
+                        el.sourceline,
+                        "arg-placement",
+                        f"xacro:arg inside {where}, declare it at top level",
+                    )
                 )
-            )
+            elif any(
+                tag_name(s) != "xacro:arg" for s in el.itersiblings(preceding=True) if tag_name(s)
+            ):
+                issues.append(
+                    Issue(
+                        el.sourceline,
+                        "arg-placement",
+                        "xacro:arg must be at the top of the file, above everything but other args",
+                    )
+                )
 
         # `$(arg ...)` substitutions are resolved at load time, so not inside macros
         if macro is not None and el is not macro:

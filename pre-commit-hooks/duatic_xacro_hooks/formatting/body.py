@@ -21,7 +21,7 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""The body below the root tag: blank lines, comments, macro calls and args."""
+"""The body below the root tag: blank lines, comments and macro calls."""
 
 from __future__ import annotations
 
@@ -251,27 +251,6 @@ def is_macro_def_start(line: str) -> bool:
     return re.match(r"\s*<xacro:macro[\s>]", line) is not None
 
 
-def move_args(lines: list[str], indent: str) -> None:
-    """Move the top-level `xacro:arg` statements (with the comment directly above) right behind the
-    root tag, in their original order. Includes and properties are not touched (see the
-    `include-placement` check of `check-xacro`).
-
-    :param lines: lines of the body, changed in place
-    :param indent: indentation of the top level
-    """
-    arg_re = re.compile(rf"{indent}<xacro:arg[\s/>]")
-    in_comment = {i for s, e in comment_ranges(lines) for i in range(s, e + 1)}
-    arg_ranges = [
-        (comment_block_start(lines, i), i)
-        for i, line in enumerate(lines)
-        if i > 0 and i not in in_comment and arg_re.match(line)
-    ]
-    args = [ln for start, end in arg_ranges for ln in lines[start : end + 1]]
-    for start, end in sorted(arg_ranges, reverse=True):
-        del lines[start : end + 1]
-    lines[1:1] = args
-
-
 BLOCK_SCOPES = {"xacro:macro", "xacro:if", "xacro:unless"}  # the root's children are blocks too
 PADDED_SCOPES = {"robot", "xacro:macro"}  # blank line behind the opening and above the closing tag
 OPEN_TAG_NAME_RE = re.compile(r"<([\w:.-]+)")
@@ -357,7 +336,7 @@ def block_spacing(lines: list[str], in_comment: set[int]) -> tuple[set[int], set
 
 
 def format_body(text: str, max_len: int, indent_size: int = 2, indent_type: str = "space") -> str:
-    """Format everything below the root tag: blank lines, macro calls, comments, args and tag wrapping.
+    """Format everything below the root tag: blank lines, macro calls, comments and tag wrapping.
 
     :param text: XML text with one element per line, starting at the root tag
     :param max_len: maximum line length
@@ -373,9 +352,8 @@ def format_body(text: str, max_len: int, indent_size: int = 2, indent_type: str 
     # comments inside text content stay inline: just drop the marker
     lines = [ln.replace("<!--" + EOL_MARKER, "<!--") for ln in lines]
 
-    unit = " " * indent_size  # lines are handled with space indentation, tabs come last
+    # lines are handled with space indentation, tabs come last
     reformat_comments(lines, indent_size, max_len)
-    move_args(lines, unit)
 
     # columns of every comment line, and where each comment block starts
     ranges = comment_ranges(lines)

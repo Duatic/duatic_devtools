@@ -67,18 +67,11 @@ Warnings (attribute order not defined for a tag) go to stderr as `file:line: war
 | Numbers | see "Number normalisation" below | `0.050` → `0.05` |
 | Attribute quotes | always `"`, quotes inside values become `&quot;` | |
 
-## Top level
-
-| Feature | What happens |
-|---|---|
-| Order | `<robot>` → `xacro:arg`s → everything else (`xacro:include` placement checked by `check-xacro`) |
-| Args | top-level `xacro:arg` are moved right behind `<robot>` (a comment directly above an arg moves with it), original order kept |
-| Header | everything above `<robot>` (XML declaration, license comment, ...) is never formatted, and no declaration is added |
-
 ## What is preserved
 
 | Kept as written | Note |
 |---|---|
+| Header | everything above `<robot>` (XML declaration, license comment, ...) is never formatted, and no declaration is added |
 | Non-ASCII characters | `°`, `ü`, ... (xmllint would turn them into `&#xB0;`) |
 | CDATA sections | `${...}` inside CDATA is not evaluated by xacro, but is in normal text: never converted |
 | Entities / DOCTYPE | `&amp;`, `&lt;`, internal `<!ENTITY>` declarations are kept, not expanded |

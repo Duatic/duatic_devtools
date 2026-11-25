@@ -24,7 +24,7 @@
 """The check codes and their descriptions."""
 
 CODES: dict[str, str] = {
-    "arg-placement": "`xacro:arg` / `$(arg ...)` anywhere but at the top level (e.g. in a macro)",
+    "arg-placement": "`xacro:arg` not at the top of the file (only other args above it), or `$(arg ...)` inside a macro",
     "block-order": "block params must come last, `*b` before `**b`",
     "block-default": "block param (`*b`, `**b`) with a default (`:=`): it has no effect, the element is required",
     "multi-block-name": "element passed for a `**b` param of a macro must be named `b`",
