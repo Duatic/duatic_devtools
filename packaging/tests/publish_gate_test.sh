@@ -73,20 +73,20 @@ gate fail "DISTROS and a request naming no distro" "the request names no DISTRO"
 gate fail "a root the key was not pinned to" "this key may not publish into 'products/a'" \
     "$(request jazzy app:products/a:1.0)" "DISTROS=jazzy" -- public
 
-gate pass "CHANNELS lets the request pick a permitted channel" "DISTRO=jazzy CHANNEL=edge SPECS=app:public:1.0" \
-    "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" "CHANNELS=stable edge" -- public
-gate fail "a channel the key was not given" "this key may not deliver into 'nightly'" \
-    "$(request jazzy app:public:1.0 nightly)" "DISTROS=jazzy" "CHANNELS=stable edge" -- public
-gate fail "without CHANNELS a request for another channel is refused" "this key delivers into 'stable', not 'edge'" \
-    "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" -- public
-gate pass "without CHANNELS a request for the line's channel goes ahead" "DISTRO=jazzy CHANNEL=edge SPECS=app:public:1.0" \
-    "$(request jazzy app:public:1.0 edge)" "DISTROS=jazzy" "CHANNEL=edge" -- public
-gate pass "a permitted promotion, in the key's roots" "PROMOTE edge -> nightly ROOTS=public" \
-    "PROMOTE='edge:nightly'" "PROMOTIONS=edge:nightly" -- public
-gate fail "a promotion the key was not given" "this key may not promote 'edge:stable'" \
-    "PROMOTE='edge:stable'" "PROMOTIONS=edge:nightly" -- public
-gate fail "no promotion without PROMOTIONS" "this key may not promote 'edge:nightly'" \
-    "PROMOTE='edge:nightly'" "DISTROS=jazzy" -- public
+gate pass "CHANNELS lets the request pick a permitted channel" "DISTRO=jazzy CHANNEL=nightly SPECS=app:public:1.0" \
+    "$(request jazzy app:public:1.0 nightly)" "DISTROS=jazzy" "CHANNELS=stable nightly" -- public
+gate fail "a channel the key was not given" "this key may not deliver into 'beta'" \
+    "$(request jazzy app:public:1.0 beta)" "DISTROS=jazzy" "CHANNELS=stable nightly" -- public
+gate fail "without CHANNELS a request for another channel is refused" "this key delivers into 'stable', not 'nightly'" \
+    "$(request jazzy app:public:1.0 nightly)" "DISTROS=jazzy" -- public
+gate pass "without CHANNELS a request for the line's channel goes ahead" "DISTRO=jazzy CHANNEL=nightly SPECS=app:public:1.0" \
+    "$(request jazzy app:public:1.0 nightly)" "DISTROS=jazzy" "CHANNEL=nightly" -- public
+gate pass "a permitted promotion, in the key's roots" "PROMOTE stable -> product1 ROOTS=public" \
+    "PROMOTE='stable:product1'" "PROMOTIONS=stable:product1" -- public
+gate fail "a promotion the key was not given" "this key may not promote 'product1:stable'" \
+    "PROMOTE='product1:stable'" "PROMOTIONS=stable:product1" -- public
+gate fail "no promotion without PROMOTIONS" "this key may not promote 'stable:product1'" \
+    "PROMOTE='stable:product1'" "DISTROS=jazzy" -- public
 
 gate pass "a permitted set release goes to the line" "DISTRO=jazzy CHANNEL=product1 SPECS=app:public:2.0.0 SET_RELEASE=1" \
     "SET='product1' $(request jazzy app:public:2.0.0)" "DISTROS=jazzy" "SETS=product1" -- public

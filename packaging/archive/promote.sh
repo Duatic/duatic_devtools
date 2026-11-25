@@ -23,8 +23,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-# Switch a channel to what another channel publishes, for every Ubuntu release, so nightly can
-# follow edge without a build. Runs on the publish host, like add_and_publish.sh.
+# Switch a channel to what another channel publishes, for every Ubuntu release, without a build. Runs on the publish host, like add_and_publish.sh.
 #
 # ROOTS limits it to those roots, space separated; empty switches every root.
 #
@@ -64,4 +63,4 @@ for os in $(for d in $KNOWN_DISTROS; do ubuntu_for "$d"; done | sort -u); do
         -v "$PWD:/work" -v "$PWD/dist:/dist" \
         "$IMAGE" /work/publish_archives.sh
 done
-prune_edge_sources
+prune_build_sources

@@ -242,11 +242,36 @@ STUB_FAIL=product1 run fail "a line publish that fails" app:public:2.0.1 "publis
 cp "$A/out/stable/app_2.0.1_all.deb" "$A/out/"
 run pass "is repaired by a retry" app:public:2.0.1 "ok    app 2.0.1 in dist/public/dists/noble-product1"
 
-archive edge
+archive nightly
 deb 1.0.0+git20261107120000.abc1234 out
-CHANNEL=edge run pass "edge still publishes" app:public:1.0.0+git20261107120000.abc1234 \
-    "ok    app 1.0.0+git20261107120000.abc1234 in dist/public/dists/noble-edge"
-check "  and keeps its newest builds" grep -qx KEEP_VERSIONS=3 docker-args-edge
+CHANNEL=nightly run pass "nightly takes a build of main" app:public:1.0.0+git20261107120000.abc1234 \
+    "ok    app 1.0.0+git20261107120000.abc1234 in dist/public/dists/noble-nightly"
+check "  and keeps its newest builds" grep -qx KEEP_VERSIONS=3 docker-args-nightly
+check "  from its own out/" test -f out/nightly/app_1.0.0+git20261107120000.abc1234_all.deb
+NIGHTLY_KEEP=2 CHANNEL=nightly run pass "NIGHTLY_KEEP sets how many builds stay" \
+    app:public:1.0.0+git20261107120000.abc1234 "ok    app"
+check "  and is passed to the publisher" grep -qx KEEP_VERSIONS=2 docker-args-nightly
+
+archive nightly-release
+deb 1.0.0 out
+CHANNEL=nightly run fail "nightly refuses a release" app:public:1.0.0 "is not a build of main, and nightly takes only those"
+
+archive nightly-sources
+deb 1.0.1+git20261108120000.def5678 out
+mkdir -p "$A/dist/public/sources/app"
+: > "$A/dist/public/sources/app/app_1.0.0+git20261107120000.abc1234.src.tar.gz"
+: > "$A/dist/public/sources/app/app_1.0.1+git20261108120000.def5678.src.tar.gz"
+mkdir -p "$A/dist/public/dists/noble-nightly/main/binary-all"
+printf 'Package: app\nVersion: 1.0.1+git20261108120000.def5678\n\n' > "$A/dist/public/dists/noble-nightly/main/binary-all/Packages"
+CHANNEL=nightly run pass "a nightly publish" app:public:1.0.1+git20261108120000.def5678 "ok    app"
+check "  prunes the source of a build no index lists" test ! -f dist/public/sources/app/app_1.0.0+git20261107120000.abc1234.src.tar.gz
+check "  keeps the source of a build still published" test -f dist/public/sources/app/app_1.0.1+git20261108120000.def5678.src.tar.gz
+
+archive edge-gone
+deb 1.0.0+git20261107120000.abc1234 out
+CHANNEL=edge run fail "edge is refused" app:public:1.0.0+git20261107120000.abc1234 \
+    "edge no longer exists, builds of main go to nightly"
+check "  and leaves the delivery in out/" test -f out/app_1.0.0+git20261107120000.abc1234_all.deb
 
 echo
 [ "$fail" = 0 ] && echo "all passed" || echo "FAILURES"

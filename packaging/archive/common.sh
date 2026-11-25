@@ -71,9 +71,9 @@ publisher_args() {
     fi
 }
 
-# prune_edge_sources: delete the source tarballs of builds of main that no published index in their
+# prune_build_sources: delete the source tarballs of builds of main that no published index in their
 # root lists any more. A binary still served keeps its source; release sources are never removed.
-prune_edge_sources() {
+prune_build_sources() {
     local src tree base pkg ver
     shopt -s nullglob
     for src in dist/public/sources/*/*+git*.src.tar.gz dist/private/*/sources/*/*+git*.src.tar.gz; do
@@ -88,7 +88,7 @@ prune_edge_sources() {
     shopt -u nullglob
 }
 
-# is_line <channel>: a product line, such as product1, rather than stable, edge or nightly.
+# is_line <channel>: a product line, such as product1, rather than stable or nightly.
 is_line() { printf '%s' "$1" | grep -qE '^[a-z]+[0-9]+$'; }
 
 # series_of <version>: the X.Y of a Debian version, each cut at its first non-digit, with the epoch

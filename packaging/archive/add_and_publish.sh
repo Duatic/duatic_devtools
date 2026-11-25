@@ -29,7 +29,7 @@
 #
 # Each channel publishes its own deliveries: a delivery arriving in out/ moves to out/<channel>/,
 # and that channel's suites are published from there alone. CHANNEL is stable for releases and
-# edge for builds of main; edge keeps the newest EDGE_KEEP builds of each package (default 3).
+# nightly for builds of main; nightly keeps the newest NIGHTLY_KEEP builds of each package (default 3).
 #
 # A channel ending in a digit, such as product1, is a product line: a set of releases customers
 # install from. It takes only patch releases of what it holds: a delivery whose X.Y the line holds
@@ -75,7 +75,7 @@ done
 cd "$ARCHIVE"
 [ -d lists ] || { echo "FATAL: no lists/ in $ARCHIVE. Run gen_release_set.sh first." >&2; exit 1; }
 
-# stable takes releases and edge builds of main, refused before anything moves.
+# stable takes releases and nightly builds of main, refused before anything moves.
 for spec in "$@"; do
     # Names and versions become paths below, so nothing but Debian's own forms passes.
     pkg="${spec%%:*}"; ver="${spec##*:}"
@@ -84,9 +84,10 @@ for spec in "$@"; do
     printf '%s' "$ver" | grep -qE '^[0-9][A-Za-z0-9.+~-]*$' \
         || { echo "FATAL: '$ver' in '$spec' is not a Debian version" >&2; exit 1; }
     case "$CHANNEL:${spec##*:}" in
+        edge:*) echo "FATAL: edge no longer exists, builds of main go to nightly (CHANNEL=nightly)" >&2; exit 1 ;;
         stable:*+git*) echo "FATAL: $spec is a build of main, and stable takes releases" >&2; exit 1 ;;
-        edge:*+git*) ;;
-        edge:*) echo "FATAL: $spec is not a build of main, and edge takes only those" >&2; exit 1 ;;
+        nightly:*+git*) ;;
+        nightly:*) echo "FATAL: $spec is not a build of main, and nightly takes only those" >&2; exit 1 ;;
     esac
     if is_line "$CHANNEL"; then
         case "${spec##*:}" in
@@ -356,7 +357,7 @@ publish_channel() {
     if [ "$ch" = "$CHANNEL" ]; then suite="$SUITE"; else suite="${OS_VERSION}-${ch}"; fi
     echo "--- publishing $suite"
     publisher_args
-    if [ "$ch" = edge ]; then keep_args=(-e "KEEP_VERSIONS=${EDGE_KEEP:-3}"); fi
+    if [ "$ch" = nightly ]; then keep_args=(-e "KEEP_VERSIONS=${NIGHTLY_KEEP:-3}"); fi
     docker run --rm \
         "${PUBLISHER_ARGS[@]}" \
         -e "OS_VERSION=$OS_VERSION" -e "CHANNEL=$ch" -e "LIST_DISTROS=$LIST_DISTROS" \
@@ -364,7 +365,7 @@ publish_channel() {
         -v "$PWD:/work" -v "$PWD/$out:/out" -v "$PWD/dist:/dist" \
         "$IMAGE" /work/publish_archives.sh \
         || { echo "FATAL: publishing $suite failed" >&2; return 1; }
-    if [ "$ch" = edge ]; then prune_edge_sources; fi
+    if [ "$ch" = nightly ]; then prune_build_sources; fi
 
     echo "--- verifying the published index"
     # publish_archives.sh skips a root it finds no packages for and still succeeds, so its exit

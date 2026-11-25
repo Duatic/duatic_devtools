@@ -37,7 +37,7 @@ on packages already published there. Every dependency of the package it publishe
 rosdep to its Debian name, and `mk-build-deps` installs build dependencies from it. It needs
 `ARCHIVE_KEYRING`, the archive's public key mounted into the container, which apt checks the
 archive's signature against. `ARCHIVE_CHANNELS` lists the channels read, by default `stable`; a
-build of main reads `edge stable`, so a dependency without a build of main comes from its release.
+build of main reads `nightly stable`, so a dependency without a build of main comes from its release.
 A suite the archive does not publish yet is read as empty, and with none published the build goes
 ahead without the archive. Any other failure to reach it stops the build.
 
@@ -53,7 +53,7 @@ is ECDSA P-256: apt's GnuTLS client does not send an RSA one to a TLS 1.3 server
   -e ARCHIVE_KEYRING=/keys/duatic-archive.gpg \
   -e ARCHIVE_CLIENT_CERT=/keys/client.crt \
   -e ARCHIVE_CLIENT_KEY=/keys/client.key \
-  -e ARCHIVE_CHANNELS='edge stable' \
+  -e ARCHIVE_CHANNELS='nightly stable' \
   -v <directory holding the key and the client certificate>:/keys:ro \
 ```
 

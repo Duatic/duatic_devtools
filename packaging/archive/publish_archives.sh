@@ -28,7 +28,7 @@
 # an InRelease advertising paths it then 403s on, reported as a broken repository.
 #
 # Each root and Ubuntu release keeps one aptly repo per channel, so a channel only ever publishes
-# its own deliveries. With KEEP_VERSIONS set (edge), the channel keeps that many builds of each
+# its own deliveries. With KEEP_VERSIONS set (nightly), the channel keeps that many builds of each
 # package and drops the snapshots no suite publishes any more. With PROMOTE_FROM set, nothing is
 # added: the channel is switched to the snapshot PROMOTE_FROM publishes, in the roots named by
 # PROMOTE_ROOTS (all when empty).
@@ -221,11 +221,12 @@ publish_snapshot() {
     fi
 }
 
-# drop_unpublished_edge <endpoint>: edge snapshots no suite publishes, and the files only they held.
-drop_unpublished_edge() {
-    local ep="$1" published snap
+# drop_unpublished_snapshots <endpoint> <channel>: the channel's snapshots no suite publishes, and the
+# files only they held.
+drop_unpublished_snapshots() {
+    local ep="$1" ch="$2" published snap
     published="$(apt_ly publish list 2>/dev/null)"
-    for snap in $(apt_ly snapshot list -raw 2>/dev/null | grep "^${ep}-${OS_VERSION}-edge-" || true); do
+    for snap in $(apt_ly snapshot list -raw 2>/dev/null | grep "^${ep}-${OS_VERSION}-${ch}-" || true); do
         printf '%s' "$published" | grep -qF "[$snap]" && continue
         apt_ly snapshot drop "$snap" >/dev/null
         echo "    dropped snapshot $snap"
@@ -340,7 +341,7 @@ for entry in "${ARCHIVES[@]}"; do
         archs="$(printf '%s' "$line" | sed -nE 's/^[^[]*\[([^]]*)\].*/\1/p' | norm)"
         echo "    $from publishes $snap [$archs]"
         publish_snapshot "$ep" "$snap" "$archs"
-        drop_unpublished_edge "$ep"
+        drop_unpublished_snapshots "$ep" "$PROMOTE_FROM"
         continue
     fi
 
@@ -445,7 +446,7 @@ for entry in "${ARCHIVES[@]}"; do
         apt_ly snapshot create "$snap" from repo "$repo" >/dev/null
     fi
     publish_snapshot "$ep" "$snap" "$archs"
-    if [ "$CHANNEL" = edge ]; then drop_unpublished_edge "$ep"; fi
+    if [ "$CHANNEL" = nightly ]; then drop_unpublished_snapshots "$ep" nightly; fi
     # For a machine to install before apt knows the archive; only once the suite carries it.
     if [ -n "$setup_deb" ]; then
         boot="$(basename "$setup_deb")"; boot="$tree/setup/$OS_VERSION/${boot%%_*}.deb"
