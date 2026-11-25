@@ -23,7 +23,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-# Switch a channel to what another channel publishes, for every Ubuntu release, without a build. Runs on the publish host, like add_and_publish.sh.
+# Switch a channel to what another channel publishes, for every Ubuntu release, without a build.
+# Runs on the publish host, like add_and_publish.sh.
 #
 # ROOTS limits it to those roots, space separated; empty switches every root.
 #

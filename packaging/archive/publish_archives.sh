@@ -341,7 +341,6 @@ for entry in "${ARCHIVES[@]}"; do
         archs="$(printf '%s' "$line" | sed -nE 's/^[^[]*\[([^]]*)\].*/\1/p' | norm)"
         echo "    $from publishes $snap [$archs]"
         publish_snapshot "$ep" "$snap" "$archs"
-        drop_unpublished_snapshots "$ep" "$PROMOTE_FROM"
         continue
     fi
 
