@@ -22,12 +22,14 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """Golden-file test of `format-xacro`: every `format_cases/NAME.xacro.in` is formatted and compared
-with `format_cases/NAME.xacro.out`. The cases are the tricky inputs of the formatter docs (where it
-differs from `xmllint --format`: non-ASCII, CDATA, entities, comments, wrapping, ...)."""
+with `format_cases/NAME.xacro.out`, and its warnings with `NAME.xacro.warnings` (none if absent).
+The cases are the tricky inputs of the formatter docs (where it differs from `xmllint --format`:
+non-ASCII, CDATA, entities, comments, wrapping, ...)."""
 
 from pathlib import Path
 
 from duatic_xacro_hooks import format_xacro
+from duatic_xacro_hooks.format_xacro import format_text
 
 CASES = Path(__file__).resolve().parent / "format_cases"
 
@@ -60,6 +62,12 @@ def test_formatted_cases_match_their_expected_output(tmp_path):
         expected = (CASES / f"{name}.xacro.out").read_bytes()
         scratch = tmp_path / name
         scratch.mkdir()
+
+        # the warnings (stderr) are stored beside the case, none if there is no file
+        warnings_file = CASES / f"{name}.xacro.warnings"
+        expected_warnings = warnings_file.read_text().splitlines() if warnings_file.exists() else []
+        if format_text(src.decode(), label=name)[1] != expected_warnings:
+            failures.append(f"{name}: warnings differ from {warnings_file.name}")
 
         formatted = run_formatter(name, src, scratch)
         if formatted != expected:
