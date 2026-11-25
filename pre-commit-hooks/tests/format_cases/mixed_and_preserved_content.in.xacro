@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:macro name="m" params=""><text>some <b>bold</b>   text</text></xacro:macro>
+<text xml:space="preserve">
+  keep   <b>this</b>
+</text>
+</robot>

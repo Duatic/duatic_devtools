@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <link name="a"/>
+
+  <xacro:arg name="late" default="1"/>
+
+  <!-- doc of b -->
+  <xacro:arg name="b" default="2"/>
+
+</robot>

@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<link name="a"/> <!-- moves above -->
+<xacro:macro name="m" params="a">
+<link name="${a}"/> <!-- nolint: unused-param -->
+</xacro:macro> <!-- moves below the closing tag -->
+<joint name="j" type="fixed"><!-- only content: moves above, tag collapses --></joint> <!-- nolint: mesh-uri -->
+<link name="n"/> <!-- nolint: b --> <!-- nolint --> <!-- nolint: a -->
+<link name="o"/> <!-- note --> <!-- nolint: z, y --> <!-- nolint: z --> <!-- another note -->
+</robot>

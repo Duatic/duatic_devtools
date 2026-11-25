@@ -13,7 +13,7 @@
 # See https://github.com/pre-commit/pre-commit
 
 # Vendored code is kept byte-identical to upstream
-exclude: ^third_party/
+exclude: ^(third_party/|pre-commit-hooks/tests/format_cases/)
 
 repos:
   # Standard hooks

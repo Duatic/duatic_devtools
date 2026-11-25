@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <link name="a"/>
+
+  <xacro:property name="q" value="say &quot;hi&quot;"/>
+  <xacro:property name="r" value="it&quot;s"/>
+
+</robot>

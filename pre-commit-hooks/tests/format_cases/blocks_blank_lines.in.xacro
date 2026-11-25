@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<link name="a"/>
+
+
+
+<joint name="j" type="fixed"><parent link="a"/><child link="b"/></joint>
+<xacro:if value="1"><link name="x"/><joint name="jx" type="fixed"/></xacro:if>
+<xacro:property name="a" value="1"/>
+<xacro:property name="b" value="2"/>
+</robot>

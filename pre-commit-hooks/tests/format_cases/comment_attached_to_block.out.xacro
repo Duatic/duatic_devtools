@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <link name="a"/>
+
+  <!-- about b -->
+  <!-- more about b -->
+  <link name="b"/>
+
+  <!-- about the joint -->
+  <joint name="j" type="fixed"/>
+
+  <!-- first thing in a macro call scope -->
+  <xacro:m a="1"/>
+
+  <c>
+    <!-- belongs to d -->
+    <d/>
+  </c>
+
+  <link name="e"/>
+
+  <!-- belongs to f -->
+  <link name="f"/>
+
+</robot>

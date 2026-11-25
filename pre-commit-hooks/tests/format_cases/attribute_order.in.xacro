@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" version="1.0" name="r">
+<joint type="revolute" name="j"><child link="b"/><parent link="a"/><axis xyz="0 0 1"/><limit velocity="1" effort="2" upper="3" lower="-3"/></joint>
+<mesh scale="1 1 1" filename="package://p/m.stl"/>
+<unknown_tag z="1" a="2"/>
+</robot>

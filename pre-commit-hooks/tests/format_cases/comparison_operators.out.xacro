@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:if value="${a == b}">
+    <link name="x"/>
+  </xacro:if>
+  <xacro:if value="${a != b and c &lt;= d or e &gt;= f}">
+    <link name="y"/>
+  </xacro:if>
+  <xacro:if value="${name == 'a==b'}">
+    <link name="z"/>
+  </xacro:if>
+
+  <xacro:property name="p" value="a==b"/>
+
+</robot>

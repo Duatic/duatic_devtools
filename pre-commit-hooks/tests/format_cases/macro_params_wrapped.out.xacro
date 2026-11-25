@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="m"
+               params="a
+                       b:=2
+                       c:=3
+                       d:=${1 + 2}
+                       e:=^|${x}
+                       *block
+                       **multi">
+
+    <link name="${a}"/>
+
+  </xacro:macro>
+
+  <xacro:macro name="short"
+               params="a
+                       b">
+
+    <link name="${a}${b}"/>
+
+  </xacro:macro>
+
+</robot>

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+  a very long single line comment that does not fit into the maximum line length of one hundred
+  characters
+  -->
+  <!--
+   first line
+  second  with a tab
+       indented line which is also very long and has to be wrapped around to the next line by the
+       formatter
+
+   https://example.com/an/unbreakable/url/that/is/longer/than/the/maximum/line/length/of/one/hundred/characters
+  -->
+  <link name="a"/>
+
+</robot>

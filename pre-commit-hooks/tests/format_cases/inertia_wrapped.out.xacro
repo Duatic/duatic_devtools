@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <inertial>
+    <inertia ixx="0.0000012345" iyy="0.0000012345" izz="0.0000012345" ixy="0" ixz="0" iyz="0"/>
+  </inertial>
+  <inertial>
+    <inertia ixx="${very_long_expression_for_ixx}"
+             iyy="${very_long_expression_for_iyy}"
+             izz="${very_long_expression_for_izz}"
+             ixy="${very_long_expression_for_ixy}"
+             ixz="0"
+             iyz="0"/>
+  </inertial>
+
+</robot>
