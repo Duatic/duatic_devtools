@@ -40,7 +40,8 @@ from duatic_xacro_hooks.common import is_macro_call, parse_nolint
 
 
 def mark_eol_comments(src: str) -> str:
-    """Tag all comments behind other content on their line (re-indenting would put them on their own line).
+    """Tag all comments behind other content on their line (re-indenting would put them on their own line),
+    except those directly in front of an element on that line: they belong to it.
 
     :param src: content of the file
     :returns: the text with the marked comments
@@ -56,46 +57,138 @@ def mark_eol_comments(src: str) -> str:
         if m.group(1) or m.start() < start:
             return m.group(0)
         line_start = src.rfind("\n", 0, m.start()) + 1
-        if src[line_start : m.start()].strip():
-            return f"<!--{EOL_MARKER}{m.group(2)}-->"
-        return m.group(0)
+        if not src[line_start : m.start()].strip():
+            return m.group(0)
+
+        # a comment right in front of an element on the same line belongs to that element
+        line_end = src.find("\n", m.end())
+        after = src[m.end() : line_end if line_end >= 0 else len(src)].lstrip()
+        if re.match(r"<[\w:.-]", after):
+            return m.group(0)
+        return f"<!--{EOL_MARKER}{m.group(2)}-->"
 
     return re.sub(r"(<!\[CDATA\[.*?\]\]>)|<!--(.*?)-->", repl, src, flags=re.S)
 
 
 def place_eol_comments(lines: list[str]) -> None:
-    """Comments that were at a line end: nolint goes back to the end of the line it followed, any
-    other comment moves above that line (below it for a closing tag).
+    """Comments that were at a line end: all `nolint` comments of a line are merged into one that goes
+    back to the end of the line they followed, any other comment moves above that line (below it
+    for a closing tag).
+
+    Examples::
+
+        >>> marker = "<!--" + EOL_MARKER
+        >>> lines = ["<a/>", f"{marker} nolint: x -->", f"{marker} note -->", f"{marker} nolint: b -->"]
+        >>> place_eol_comments(lines)
+        >>> lines
+        ['<!-- note -->', '<a/>  <!-- nolint: b, x -->']
 
     :param lines: lines of the formatted text, changed in place
     """
     marker = "<!--" + EOL_MARKER
-    for s, e in reversed(comment_ranges(lines)):
-        first = lines[s].lstrip()
-        if not first.startswith(marker):
-            continue
 
-        # drop the marker; comments that follow another comment (or the start) stay put
-        lines[s] = lines[s][: len(lines[s]) - len(first)] + "<!--" + first[len(marker) :]
-        prev = s - 1
+    # the marked comments that directly follow each other were all behind the same line
+    chains: list[list[tuple[int, int]]] = []
+    for s, e in comment_ranges(lines):
+        if not lines[s].lstrip().startswith(marker):
+            continue
+        if chains and chains[-1][-1][1] + 1 == s:
+            chains[-1].append((s, e))
+        else:
+            chains.append([(s, e)])
+
+    for chain in reversed(chains):
+        first, last = chain[0][0], chain[-1][1]
+        blocks = []  # (is a nolint, its codes, lines) of each comment
+        for s, e in chain:
+            block = [
+                lines[s + i].replace(marker, "<!--", 1) if i == 0 else lines[s + i]
+                for i in range(e - s + 1)
+            ]
+            is_nolint, codes = (
+                parse_nolint(block[0].strip()[4:-3]) if s == e else (False, frozenset())
+            )
+            blocks.append((is_nolint, codes, block))
+
+        # comments that follow another comment (or the start) stay put
+        prev = first - 1
         if prev < 0 or lines[prev].lstrip().startswith("<!--"):
+            lines[first : last + 1] = [ln for _, _, block in blocks for ln in block]
             continue
 
-        # a nolint goes back to the end of the line above
-        is_nolint, codes = parse_nolint(lines[s].strip()[4:-3])
-        if s == e and is_nolint:
-            nolint = "<!-- nolint" + (f": {', '.join(sorted(codes))}" if codes else "") + " -->"
-            lines[prev] = lines[prev].rstrip() + "  " + nolint
-            del lines[s]
-            continue
+        # all nolints become one at the end of the line above (none of them with codes: all checks)
+        nolints = [codes for is_nolint, codes, _ in blocks if is_nolint]
+        others = [block for is_nolint, _, block in blocks if not is_nolint]
+        code, existing = split_eol(lines[prev])
+        if existing:
+            nolints.append(parse_nolint(existing[4:-3])[1])
+        if nolints:
+            merged = (
+                frozenset() if any(not codes for codes in nolints) else frozenset().union(*nolints)
+            )
+            text = "<!-- nolint" + (f": {', '.join(sorted(merged))}" if merged else "") + " -->"
+            lines[prev] = code.rstrip() + "  " + text
 
-        # any other comment moves above the line it followed
-        if split_eol(lines[prev])[0].lstrip().startswith("</"):
-            continue  # stays below the closing tag as an own-line comment
-        block = lines[s : e + 1]
-        block[0] = lines[prev][: indent_of(lines[prev])] + block[0].lstrip()
-        del lines[s : e + 1]
-        lines[prev:prev] = block
+        # any other comment moves above the line it followed, or stays below a closing tag
+        flat = [ln for block in others for ln in block]
+        if code.lstrip().startswith("</"):
+            lines[first : last + 1] = flat
+            continue
+        pad = lines[prev][: indent_of(lines[prev])]
+        if flat:
+            flat[0] = pad + flat[0].lstrip()
+            for block in others[1:]:
+                flat[flat.index(block[0])] = pad + block[0].lstrip()
+        del lines[first : last + 1]
+        lines[prev:prev] = flat
+
+
+def collapse_comment_only(lines: list[str]) -> None:
+    """Elements without a body or with only comments in it close on the line of their opening tag,
+    the comments move above it.
+
+    Examples::
+
+        >>> lines = ["<r>", "  <a>", "    <!-- x -->", "  </a>", "</r>"]
+        >>> collapse_comment_only(lines)
+        >>> lines
+        ['<r>', '  <!-- x -->', '  <a/>', '</r>']
+
+    :param lines: lines of the body, one element per line, changed in place
+    """
+    changed = True
+    while changed:
+        changed = False
+        ranges = {s: e for s, e in comment_ranges(lines)}
+        for i, line in enumerate(lines):
+            code, eol = split_eol(line)
+            name = OPEN_TAG_NAME_RE.match(code.strip())
+            if i == 0 or not name or not opens_scope(line) or "xml:space" in code:
+                continue
+
+            # only comments (and blank lines) up to the closing tag
+            j = i + 1
+            while j < len(lines) and (not lines[j].strip() or j in ranges):
+                j = ranges[j] + 1 if j in ranges else j + 1
+            closing, closing_eol = split_eol(lines[j]) if j < len(lines) else ("", "")
+            if closing.strip() != f"</{name.group(1)}>":
+                continue
+
+            pad = lines[i][: indent_of(lines[i])]
+            block: list[str] = []
+            k = i + 1
+            while k < j:
+                end = ranges.get(
+                    k, k
+                )  # blank lines between comments are dropped, those in them kept
+                if lines[k].strip():
+                    block.extend([pad + lines[k].lstrip(), *lines[k + 1 : end + 1]])
+                k = end + 1
+            # a `nolint` behind either tag ends up behind the collapsed one
+            nolint = "  " + (eol or closing_eol).strip() if eol or closing_eol else ""
+            lines[i : j + 1] = block + [code.rstrip()[:-1] + "/>" + nolint]
+            changed = True
+            break
 
 
 def comment_ranges(lines: list[str]) -> list[tuple[int, int]]:
@@ -274,6 +367,30 @@ def opens_scope(line: str) -> bool:
     return not tag.endswith(f"</{m.group(1)}>")
 
 
+def preserved_end(lines: list[str], start: int) -> int:
+    """Index of the line that closes the element opened on line `start` (the last line if it is never closed).
+
+    Examples::
+
+        >>> preserved_end(["<a>", "<a>", "</a>", "</a>", "<b/>"], 0)
+        3
+
+    :param lines: lines of the body
+    :param start: index of the line with the opening tag
+    :returns: the index of the closing line
+    """
+    name = re.escape(OPEN_TAG_NAME_RE.match(lines[start].lstrip()).group(1))  # type: ignore[union-attr]
+    depth = 0
+    for i in range(start, len(lines)):
+        depth += len(
+            re.findall(rf"<{name}(?=[\s>/])(?:[^<>]|<!\[CDATA\[.*?\]\]>)*(?<!/)>", lines[i])
+        )
+        depth -= len(re.findall(rf"</{name}\s*>", lines[i]))
+        if depth <= 0:
+            return i
+    return len(lines) - 1
+
+
 def block_spacing(lines: list[str], in_comment: set[int]) -> tuple[set[int], set[int], set[int]]:
     """Blank lines between the blocks of the scopes that hold blocks: the root, macro bodies and
     `xacro:if` / `unless` bodies. Every child element is a block and is separated from its
@@ -316,9 +433,10 @@ def block_spacing(lines: list[str], in_comment: set[int]) -> tuple[set[int], set
             above.add(closing)
             forced.add(closing)
 
+    opaque_end = -1  # last line of an `xml:space="preserve"` element: its lines are not structure
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if i in in_comment or not stripped:
+        if i <= opaque_end or i in in_comment or not stripped:
             continue
         col = indent_of(line)
         while stack and col <= stack[-1][0]:
@@ -327,7 +445,9 @@ def block_spacing(lines: list[str], in_comment: set[int]) -> tuple[set[int], set
             continue
         if stack:
             stack[-1][2].append(i)
-        if i == 0 or opens_scope(line):
+        if opens_scope(line) and 'xml:space="preserve"' in stripped:
+            opaque_end = preserved_end(lines, i)
+        elif i == 0 or opens_scope(line):
             tag = OPEN_TAG_NAME_RE.match(stripped).group(1)  # type: ignore[union-attr]
             stack.append((col, tag, []))
     while stack:
@@ -351,6 +471,7 @@ def format_body(text: str, max_len: int, indent_size: int = 2, indent_type: str 
     place_eol_comments(lines)
     # comments inside text content stay inline: just drop the marker
     lines = [ln.replace("<!--" + EOL_MARKER, "<!--") for ln in lines]
+    collapse_comment_only(lines)
 
     # lines are handled with space indentation, tabs come last
     reformat_comments(lines, indent_size, max_len)

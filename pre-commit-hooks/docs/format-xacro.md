@@ -24,6 +24,7 @@ Warnings (attribute order not defined for a tag) go to stderr as `file:line: war
 |---|---|---|
 | Re-indentation | one element per line, any indent size, spaces or tabs; mixed content and `xml:space="preserve"` stay | `<a><b/></a>` → `<a>`⏎`  <b/>`⏎`</a>` |
 | Empty tags | `<a></a>`, `<a> </a>`, `<a>⏎</a>` close on the same line | `<a x="1"></a>` → `<a x="1"/>` |
+| Comment-only tags | an element whose body is only comments closes on the same line, the comments move above it | `<a><!-- c --></a>` → `<!-- c -->`⏎`<a/>` |
 | Blocks | every child of the root, of a macro body and of an `xacro:if` / `unless` body: one blank line above and below. Children of other elements (e.g. `<link>`) are not blocks | |
 | Equal blocks | neighbouring blocks with the same tag (same macro name for calls) stay together, if no comment is between them; `xacro:macro` definitions are always separated | |
 | Comments | a comment block directly above a block stays attached: the blank goes above the comment. Comment blocks always get a blank above, none right behind a parent tag | |
@@ -40,7 +41,7 @@ Warnings (attribute order not defined for a tag) go to stderr as `file:line: war
 | Relative indentation | extra indentation of a text line is kept (also on its wrapped continuation) |
 | Tabs / trailing spaces | tabs inside comments become spaces, trailing whitespace is removed |
 | Short comments | `<!--   text   -->` → `<!-- text -->` |
-| End-of-line comments | not allowed: moved above the element they followed (below it for a closing tag such as `</xacro:macro>`); only `nolint` stays at the end of the line |
+| End-of-line comments | not allowed: moved above the element they followed (below it for a closing tag such as `</xacro:macro>`); only `nolint` stays at the end of the line. Several `nolint` comments behind one line are merged into one (union of the codes, none: all checks). A comment directly in front of an element on the same line belongs to that element (`<c><!-- x --><d/></c>`: the comment goes above `<d/>`, inside `<c>`) |
 | Comment contents | never reformatted as XML, nothing inside a comment is moved |
 
 ## Line length and wrapping
