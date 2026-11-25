@@ -35,7 +35,7 @@ from duatic_xacro_hooks.checks.includes import IncludeIndex, find_packages
 from duatic_xacro_hooks.checks.macros import (
     check_blocks,
     check_duplicates,
-    check_empty_macros,
+    check_empty_blocks,
     check_calls,
     collect_macros,
     load_registry,
@@ -98,7 +98,7 @@ def check_text(
             + check_library(root)
             + check_mesh_uris(root)
             + check_origins(root)
-            + check_empty_macros(root)
+            + check_empty_blocks(root)
             + check_unused_params(root, registry)
             + check_calls(root, registry)
             + check_duplicates(root, brought, path)

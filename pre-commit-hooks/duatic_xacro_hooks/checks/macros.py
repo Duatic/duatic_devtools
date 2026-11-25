@@ -244,17 +244,23 @@ def check_duplicates(
     return issues
 
 
-def check_empty_macros(root: Element) -> list[Issue]:
-    """Macros without any element in their body (`empty-macro`).
+EMPTY_BLOCK_TAGS = {"robot", "xacro:macro", "xacro:if", "xacro:unless"}
+
+
+def check_empty_blocks(root: Element) -> list[Issue]:
+    """The robot, macros, `xacro:if` and `xacro:unless` without any element in their body (`empty-block`).
+    Comments do not count as content.
 
     :param root: root element of the file
     :returns: the issues found
     """
-    return [
-        Issue(el.sourceline, "empty-macro", f"macro '{el.get('name')}' has an empty body")
-        for el in elements(root)
-        if tag_name(el) == "xacro:macro" and not children(el)
-    ]
+    issues = []
+    for el in elements(root):
+        tag = tag_name(el)
+        if tag in EMPTY_BLOCK_TAGS and not children(el):
+            what = f"macro '{el.get('name')}'" if tag == "xacro:macro" else f"<{tag}>"
+            issues.append(Issue(el.sourceline, "empty-block", f"{what} has an empty body"))
+    return issues
 
 
 def check_blocks(root: Element, registry: Registry) -> list[Issue]:

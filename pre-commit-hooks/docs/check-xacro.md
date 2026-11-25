@@ -78,7 +78,7 @@ Note: `*name` and `**name` both take the next child element, in order; `block-or
 | `duplicate-property` | a property defined twice in the same scope outside `xacro:if`/`unless` (not for `default=` / `scope=`); also across files |
 | `duplicate-arg` | the same `xacro:arg` name twice; also across files |
 | `duplicate-include` | the same file included twice |
-| `empty-macro` | a macro without any element in its body |
+| `empty-block` | a `<robot>`, macro, `xacro:if` or `xacro:unless` without any element in its body (comments do not count) |
 | `mesh-uri` | a `<mesh filename>` in a `<visual>` / `<collision>` that does not start with `package://` (e.g. `file://` is not portable); a value starting with `${...}` is skipped |
 | `origin-rotation` | `<origin>` with both `rpy` and `quat_xyzw` |
 

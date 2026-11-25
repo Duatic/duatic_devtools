@@ -42,7 +42,7 @@ CODES: dict[str, str] = {
     "origin-rotation": "`<origin>` with both `rpy` and `quat_xyzw`",
     "xml-declaration": 'file does not start with an XML declaration (`<?xml version="1.0"?>`)',
     "xml-encoding": "declared encoding is not UTF-8 (xacro only reads UTF-8)",
-    "empty-macro": "macro without any element in its body",
+    "empty-block": "`robot`, macro, `xacro:if` or `xacro:unless` without any element in its body (comments do not count)",
     "unused-param": "value param of a macro that its body never uses",
     "duplicate-macro": "macro name defined more than once (in this file or another one)",
     "duplicate-property": "property defined twice in the same scope (outside xacro:if/unless, also across included files)",
