@@ -21,8 +21,8 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""Golden-file test of `format-xacro`: every `format_cases/NAME.in.xacro` is formatted and compared
-with `format_cases/NAME.out.xacro`. The cases are the tricky inputs of the formatter docs (where it
+"""Golden-file test of `format-xacro`: every `format_cases/NAME.xacro.in` is formatted and compared
+with `format_cases/NAME.xacro.out`. The cases are the tricky inputs of the formatter docs (where it
 differs from `xmllint --format`: non-ASCII, CDATA, entities, comments, wrapping, ...)."""
 
 from pathlib import Path
@@ -48,22 +48,22 @@ def run_formatter(name: str, src: bytes, work: Path) -> bytes:
 
 
 def test_formatted_cases_match_their_expected_output(tmp_path):
-    inputs = sorted(CASES.glob("*.in.xacro"))
+    inputs = sorted(CASES.glob("*.xacro.in"))
     assert 0 < len(inputs) <= 30
 
     failures = []
     for path in inputs:
-        name = path.name.removesuffix(".in.xacro")
+        name = path.name.removesuffix(".xacro.in")
         src = path.read_bytes()
         if "crlf" in name:  # stored with LF (git may convert line endings), formatted with CRLF
             src = src.replace(b"\n", b"\r\n")
-        expected = (CASES / f"{name}.out.xacro").read_bytes()
+        expected = (CASES / f"{name}.xacro.out").read_bytes()
         scratch = tmp_path / name
         scratch.mkdir()
 
         formatted = run_formatter(name, src, scratch)
         if formatted != expected:
-            failures.append(f"{name}: output differs from {name}.out.xacro")
+            failures.append(f"{name}: output differs from {name}.xacro.out")
         elif run_formatter(name, formatted, scratch) != formatted:  # formatting is stable
             failures.append(f"{name}: formatting its own output changes it")
 
@@ -71,6 +71,6 @@ def test_formatted_cases_match_their_expected_output(tmp_path):
 
 
 def test_every_expected_output_has_an_input():
-    inputs = {p.name.removesuffix(".in.xacro") for p in CASES.glob("*.in.xacro")}
-    outputs = {p.name.removesuffix(".out.xacro") for p in CASES.glob("*.out.xacro")}
+    inputs = {p.name.removesuffix(".xacro.in") for p in CASES.glob("*.xacro.in")}
+    outputs = {p.name.removesuffix(".xacro.out") for p in CASES.glob("*.xacro.out")}
     assert inputs == outputs
