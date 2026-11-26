@@ -108,6 +108,11 @@ for px in (here / 'src').rglob('package.xml'):
     roots[n] = root
     if kinds[n] not in ('ros', 'system'):
         sys.exit(f"{px}: duatic_package_kind is '{kinds[n]}', not ros or system")
+# An unrouted package is never published, so a published package depending on it would not install.
+unrouted = [f"{n} depends on {d}" for n in sorted(deps) if roots[n] for d in sorted(deps[n]) if not roots[d]]
+if unrouted:
+    sys.exit("FATAL: these depend on a package that declares no <duatic_archive_root>, so they would not install:\n  "
+             + "\n  ".join(unrouted))
 order, seen, marked = [], set(), set()
 def visit(n, chain=()):
     if n in seen: return

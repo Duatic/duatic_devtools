@@ -247,5 +247,27 @@ expect "a cycle through runtime dependencies still builds" [ "$got" = 0 ]
 expect "a cycle through runtime dependencies is reported as one" \
     grep -qE "cycle through runtime dependencies: .*duatic_fixture_shared -> duatic_fixture_unit_b" "$TMP/cycle.out"
 
+# ---------------------------------------------------------------- a routed package depending on an unrouted one
+w="$TMP/unrouted"
+workspace "$w"
+unit_xml="$w/packaging/workspace/src/unit_repo/duatic_fixture_unit_a/package.xml"
+sed -i 's|  <export>|  <exec_depend>duatic_fixture_tools</exec_depend>\n\n  <export>|' "$unit_xml"
+(cd "$w/packaging/workspace" && ./gen_release_set.sh > /dev/null)
+unrouted() {
+    rm -f "$TMP/args"/*
+    (cd "$w/packaging/workspace" && PATH="$TMP/bin:$PATH" STUB_ARGS="$TMP/args" VERSION_SUFFIXES="$w/suffixes.txt" \
+        ./build_all.sh) > "$TMP/unrouted.out" 2>&1
+}
+got=0; unrouted || got=$?
+expect "a routed package depending on an unrouted one is refused before any build" \
+    test "$got" != 0 -a -z "$(ls "$TMP/args")"
+expect "the refusal names the pair" \
+    grep -qxF "  duatic_fixture_unit_a depends on duatic_fixture_tools" "$TMP/unrouted.out"
+expect "the refusal says why" grep -qF "declares no <duatic_archive_root>" "$TMP/unrouted.out"
+sed -i '/<exec_depend>duatic_fixture_tools</d' "$unit_xml"
+(cd "$w/packaging/workspace" && ./gen_release_set.sh > /dev/null)
+got=0; unrouted || got=$?
+expect "without that dependency the set builds" [ "$got" = 0 ]
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

@@ -15,6 +15,8 @@ committed, tagged or pushed from it.
 
 `build_all.sh` builds every package in `packages.txt` that declares a `<duatic_archive_root>`, one
 container per package, in dependency order. A package declaring none is skipped and listed as such.
+A package that declares one but depends, to build or to run, on a skipped one is refused before any
+build, naming each such pair, since its package would not install.
 Each build installs the packages built before it from `staging/`. The order follows runtime
 dependencies as well as build dependencies, since installing a build dependency installs its runtime
 dependencies.
