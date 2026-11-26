@@ -141,6 +141,10 @@ fetched code may be GPL, which is distributed with its source.
 `DEB_VERSION_SUFFIX=+git20261027153012.ab12cd3` builds `0.4.1+git20261027153012.ab12cd3`, which sorts
 after the release `0.4.1` and before the next one. It starts with `+` or `~`.
 
+`DEB_REVISION` replaces bloom's Debian revision, `0<ubuntu>`, with `<DEB_REVISION><ubuntu>`:
+`DEB_REVISION=202611260200` builds `0.4.1+git20261027153012.ab12cd3-202611260200noble`, so a
+rebuild of the same commit is a newer version. It is digits only.
+
 ## Index what was built
 
 ```bash

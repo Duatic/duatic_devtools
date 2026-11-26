@@ -22,7 +22,8 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Build every package in packages.txt, in an order computed from what they declare.
+# Build every package in packages.txt that declares an archive root, in an order computed from what
+# they declare, into ../archive/out, with logs/<package>.log and a manifest.json of what was built.
 #
 # Each successful build lands in staging/, which the next build mounts as an apt source: a
 # package that build-depends on another cannot build until that one is installable.
@@ -31,6 +32,8 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG="$(cd "$HERE/.." && pwd)"   # the packaging/ directory, not the repository root
+
+fatal() { echo "FATAL: $*" >&2; exit 1; }
 
 # The build matrix is (ROS distro, Ubuntu release); one pair at a time here. The base image ties
 # the two together, so a distro without its matching image builds against the wrong libc.
@@ -42,22 +45,49 @@ ROSDEP_FILE="${ROSDEP_FILE:-rosdep-${ROS_DISTRO_TARGET}.yaml}"
     echo "FATAL: no rosdep mapping at archive/rosdep/$ROSDEP_FILE" >&2
     echo "       run: ROS_DISTRO_TARGET=$ROS_DISTRO_TARGET OS_VERSION=$OS_VERSION ./gen_release_set.sh" >&2
     exit 1; }
+STOP_ON_FAILURE="${STOP_ON_FAILURE:-1}"
+case "$STOP_ON_FAILURE" in 0 | 1) ;; *) fatal "STOP_ON_FAILURE is '$STOP_ON_FAILURE', not 0 or 1" ;; esac
+ARCHIVE_CHANNELS="${ARCHIVE_CHANNELS:-stable}"
+[ -z "${VERSION_SUFFIXES:-}" ] || [ -f "$VERSION_SUFFIXES" ] || fatal "VERSION_SUFFIXES=$VERSION_SUFFIXES does not exist"
+# Mounted into each build as single files, so they have to exist: docker would create a directory.
+if [ -n "${ARCHIVE_URL:-}" ]; then
+    [ -f "${ARCHIVE_KEYRING:-}" ] || fatal "ARCHIVE_URL needs ARCHIVE_KEYRING, the archive's public key"
+    keyring="$(realpath "$ARCHIVE_KEYRING")"
+fi
+case "${ARCHIVE_CLIENT_CERT:+cert}${ARCHIVE_CLIENT_KEY:+key}" in
+    cert | key) fatal "ARCHIVE_CLIENT_CERT and ARCHIVE_CLIENT_KEY are given together" ;;
+    certkey)
+        [ -f "$ARCHIVE_CLIENT_CERT" ] || fatal "ARCHIVE_CLIENT_CERT=$ARCHIVE_CLIENT_CERT does not exist"
+        [ -f "$ARCHIVE_CLIENT_KEY" ] || fatal "ARCHIVE_CLIENT_KEY=$ARCHIVE_CLIENT_KEY does not exist"
+        client_cert="$(realpath "$ARCHIVE_CLIENT_CERT")"
+        client_key="$(realpath "$ARCHIVE_CLIENT_KEY")"
+        ;;
+esac
 echo "building for $ROS_DISTRO_TARGET on ubuntu $OS_VERSION, using $BUILD_IMAGE"
 OUT="$PKG/archive/out"
+LOGS="$OUT/logs"
 STAGING="$HERE/staging"
-mkdir -p "$OUT" "$STAGING"
+mkdir -p "$OUT" "$LOGS" "$STAGING"
+rm -f "$LOGS"/*.log
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+: > "$work/manifest.tsv"
 
 # Topological order over the release set, from the <depend>/<build_depend> each package declares.
-ORDER="$(python3 - "$HERE" <<'PY'
+# One line per package: "build", name, repository, kind, root, whether it needs a gated root, suffix.
+PLAN="$(python3 - "$HERE" "${VERSION_SUFFIXES:-}" <<'PY'
 import sys, pathlib, xml.etree.ElementTree as ET
-here = pathlib.Path(sys.argv[1])
+here, suffix_file = pathlib.Path(sys.argv[1]), sys.argv[2]
 wanted = set(here.joinpath('packages.txt').read_text().split())
-deps, where, kinds = {}, {}, {}
+deps, uses, where, kinds, roots, gated = {}, {}, {}, {}, {}, set()
 for px in (here / 'src').rglob('package.xml'):
     if '.git' in px.parts: continue
     try: r = ET.parse(px).getroot()
     except Exception: continue
     n = (r.findtext('name') or '').strip()
+    root = (r.findtext('export/duatic_archive_root') or '').strip()
+    # Every root an archive URL may name for a client certificate, built here or not.
+    if root not in ('', 'public'): gated.add(root)
     if n not in wanted: continue
     d = set()
     # Build-time only: exec-only dependencies need not exist when this package compiles.
@@ -65,8 +95,12 @@ for px in (here / 'src').rglob('package.xml'):
         for e in r.findall(tag):
             if e.text and e.text.strip() in wanted: d.add(e.text.strip())
     deps[n] = d
+    # Runtime too: installing a dependency installs what it depends on.
+    uses[n] = d | {e.text.strip() for t in ('exec_depend', 'run_depend', 'buildtool_export_depend')
+                   for e in r.findall(t) if e.text and e.text.strip() in wanted}
     where[n] = px.parent.relative_to(here / 'src').parts[0]
     kinds[n] = (r.findtext('export/duatic_package_kind') or '').strip() or 'ros'
+    roots[n] = root
     if kinds[n] not in ('ros', 'system'):
         sys.exit(f"{px}: duatic_package_kind is '{kinds[n]}', not ros or system")
 order, seen, marked = [], set(), set()
@@ -78,45 +112,127 @@ def visit(n, chain=()):
     for d in sorted(deps.get(n, ())): visit(d, chain + (n,))
     marked.discard(n); seen.add(n); order.append(n)
 for n in sorted(deps): visit(n)
-print(' '.join(f"{n}:{where[n]}:{kinds[n]}" for n in order))
+
+suffixes = {}
+if suffix_file:
+    for line in pathlib.Path(suffix_file).read_text().splitlines():
+        if not line.strip(): continue
+        parts = line.split()
+        if len(parts) != 2: sys.exit(f"FATAL: VERSION_SUFFIXES: '{line}' is not <repository> <suffix>")
+        suffixes[parts[0]] = parts[1]
+routed = [n for n in order if roots[n]]
+missing = sorted({where[n] for n in routed if suffix_file and where[n] not in suffixes})
+if missing: sys.exit(f"FATAL: VERSION_SUFFIXES has no suffix for {', '.join(missing)}")
+
+def reach(n, found):
+    for d in uses[n] - found:
+        found.add(d); reach(d, found)
+    return found
+for g in sorted(gated): print(f"gated\t{g}")
+for n in order:
+    if not roots[n]: print(f"skip\t{n}")
+for n in routed:
+    needs = any(roots[m] in gated for m in reach(n, {n}))
+    print('\t'.join(('build', n, where[n], kinds[n], roots[n], str(int(needs)), suffixes.get(where[n], ''))))
 PY
-)"
-[ -n "$ORDER" ] || { echo "FATAL: could not compute a build order" >&2; exit 1; }
+)" || exit 1
+grep -q '^build' <<< "$PLAN" || fatal "nothing to build: no package in packages.txt declares <duatic_archive_root>"
+
+skipped="$(awk -F'\t' '$1 == "skip" { printf " %s", $2 }' <<< "$PLAN")"
+[ -z "$skipped" ] || echo "skipped, declaring no <duatic_archive_root>:$skipped"
+# A build needing no gated root reads only the other roots, without the client certificate; a
+# gated root's URL ends in the root.
+open_urls=""
+for url in ${ARCHIVE_URL:-}; do
+    keep=1
+    for g in $(awk -F'\t' '$1 == "gated" { print $2 }' <<< "$PLAN"); do
+        case "${url%/}" in */"$g") keep=0 ;; esac
+    done
+    [ "$keep" = 0 ] || open_urls="${open_urls:+$open_urls }$url"
+done
+
+# The packages built, as a JSON list of {package, version, root, distro, arch, files, seconds}.
+write_manifest() {
+    python3 - "$work/manifest.tsv" "$OUT/manifest.json" "$ROS_DISTRO_TARGET" <<'PY'
+import json, sys
+tsv, dest, distro = sys.argv[1:]
+built = []
+for line in open(tsv).read().splitlines():
+    pkg, root, seconds, files = line.split('\t')
+    files = files.split()
+    deb = next(f for f in files if f.endswith('.deb'))
+    _, version, arch = deb[:-len('.deb')].split('_')
+    built.append({'package': pkg, 'version': version, 'root': root, 'distro': distro, 'arch': arch,
+                  'files': files, 'seconds': int(seconds)})
+with open(dest, 'w') as out:
+    json.dump(built, out, indent=2)
+    out.write('\n')
+PY
+}
 
 built=0; failed=0; failures=""
-for entry in $ORDER; do
-    pkg="${entry%%:*}"; rest="${entry#*:}"; repo="${rest%%:*}"; kind="${rest##*:}"
+while IFS=$'\t' read -r what pkg repo kind root gated suffix; do
+    [ "$what" = build ] || continue
     # A system package builds in plain Ubuntu, on the same release.
     image="$BUILD_IMAGE"
     [ "$kind" = system ] && image="ubuntu:$OS_VERSION"
-    printf '=== %-42s (%s)\n' "$pkg" "$repo"
+    archive=()
+    if [ -n "${ARCHIVE_URL:-}" ]; then
+        urls="$open_urls"
+        [ "$gated" = 1 ] && urls="$ARCHIVE_URL"
+        archive=(-e ARCHIVE_URL="$urls" -e ARCHIVE_CHANNELS="$ARCHIVE_CHANNELS"
+            -e ARCHIVE_KEYRING=/archive/keyring.gpg -v "$keyring:/archive/keyring.gpg:ro")
+        if [ "$gated" = 1 ] && [ -n "${ARCHIVE_CLIENT_CERT:-}" ]; then
+            archive+=(-e ARCHIVE_CLIENT_CERT=/archive/client.crt -e ARCHIVE_CLIENT_KEY=/archive/client.key
+                -v "$client_cert:/archive/client.crt:ro" -v "$client_key:/archive/client.key:ro")
+        fi
+    fi
+    log="$LOGS/$pkg.log"
+    mkdir "$work/$pkg"
+    printf '=== %-42s (%s, %s)\n' "$pkg" "$repo" "$root"
+    start=$SECONDS
     if docker run --rm -i \
         -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
         -e ROSDEP_YAML="/rosdep/$ROSDEP_FILE" \
         -e ROS_DISTRO="$ROS_DISTRO_TARGET" \
         -e OS_VERSION="$OS_VERSION" \
+        -e DEB_VERSION_SUFFIX="$suffix" \
+        -e DEB_REVISION="${DEB_REVISION:-}" \
+        "${archive[@]}" \
         -v "$HERE/src/$repo:/src" \
         -v "$PKG/builder:/builder" \
         -v "$PKG/archive/rosdep:/rosdep" \
         -e LOCAL_REPO=/staging \
         -v "$STAGING:/staging" \
-        -v "$OUT:/out" \
+        -v "$work/$pkg:/out" \
         "$image" \
-        /builder/build_pkg.sh "$pkg" < /dev/null > "/tmp/build_$pkg.log" 2>&1; then
-        # Into staging so the next package can build against it. .ddeb too, since a *.deb glob
-        # misses debug packages. Fixtures stay out; they belong to packaging/tests.
-        for a in "$OUT"/*.deb "$OUT"/*.ddeb; do
+        /builder/build_pkg.sh "$pkg" < /dev/null > "$log" 2>&1; then
+        seconds=$((SECONDS - start))
+        # Into out/, and into staging so the next package can build against it. .ddeb too, since a
+        # *.deb glob misses debug packages.
+        files=""
+        for a in "$work/$pkg"/*; do
             [ -f "$a" ] || continue
-            case "$(basename "$a")" in *fixture*) continue ;; esac
-            cp -f "$a" "$STAGING/"
+            f="$(basename "$a")"
+            mv -f "$a" "$OUT/$f"
+            case "$f" in *.deb | *.ddeb) cp -f "$OUT/$f" "$STAGING/" ;; esac
+            files="$files $f"
         done
-        echo "    ok"; built=$((built+1))
+        printf '%s\t%s\t%s\t%s\n' "$pkg" "$root" "$seconds" "${files# }" >> "$work/manifest.tsv"
+        echo "    ok, ${seconds}s"; built=$((built+1))
     else
-        echo "    FAILED: /tmp/build_$pkg.log"; failed=$((failed+1)); failures="$failures $pkg"
+        echo "    FAILED: $log"; failed=$((failed+1)); failures="$failures $pkg"
+        if [ "$STOP_ON_FAILURE" = 1 ]; then
+            write_manifest
+            fatal "$pkg did not build; stopped, so nothing after it in the order was attempted"
+        fi
     fi
-done
+done <<< "$PLAN"
+write_manifest
 echo
 echo "  $built built, $failed failed"
 [ -n "$failures" ] && echo "  failures:$failures"
+[ -n "$skipped" ] && echo "  skipped, declaring no <duatic_archive_root>:$skipped"
+echo "  manifest: $OUT/manifest.json"
 # Non-zero when anything failed, so CI does not pass on a partial build.
 [ "$failed" -eq 0 ]
