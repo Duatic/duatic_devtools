@@ -22,9 +22,10 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Run workspace/build_all.sh over a throwaway workspace of fixtures, in three repositories:
+# Run workspace/build_all.sh over a throwaway workspace of fixtures, in four repositories:
 # duatic_fixture_shared in the public root, duatic_fixture_unit_a in a gated root build-depending on
-# it, and duatic_fixture_tools declaring no root. Real builds check the order, staging, versions,
+# it, duatic_fixture_unit_b in the public root that shared exec-depends on, and duatic_fixture_tools
+# declaring no root. Real builds check the order, staging, versions,
 # manifest and a stop at a failure; a stub docker checks what each build is given. Needs docker and
 # python3 on the host.
 #
@@ -39,6 +40,7 @@ trap 'rm -rf "$TMP"' EXIT
 REV=202611260200
 SHARED_V=0.1.0+git20261125223600.ab12cd3-${REV}noble
 UNIT_V=0.1.0+git20261124101010.1234567-${REV}noble
+RUNTIME_V=0.1.0+git20261124101010.fedcba9-${REV}noble
 arch=amd64
 [ "$(uname -m)" = aarch64 ] && arch=arm64
 
@@ -54,18 +56,20 @@ repo() {
     GIT_CONFIG_GLOBAL=/dev/null git -C "$d" -c user.name=t -c user.email=t@example.invalid commit -q -m fixture
 }
 
-# workspace <dir>: the packaging tooling and the three repositories, with the release set generated.
+# workspace <dir>: the packaging tooling and the four repositories, with the release set generated.
 workspace() {
     local w="$1"
     mkdir -p "$w/packaging/workspace" "$w/packaging/archive"
     cp -a "$HERE/../builder" "$w/packaging/"
     cp "$HERE/../workspace/build_all.sh" "$HERE/../workspace/gen_release_set.sh" "$w/packaging/workspace/"
-    repo "$w" base_repo duatic_fixture_shared 's|<duatic_archive_root>shared<|<duatic_archive_root>public<|'
+    repo "$w" base_repo duatic_fixture_shared \
+        's|<duatic_archive_root>shared<|<duatic_archive_root>public<|; s|  <export>|  <exec_depend>duatic_fixture_unit_b</exec_depend>\n\n  <export>|'
+    repo "$w" runtime_repo duatic_fixture_unit_b 's|units/unit-b|public|'
     repo "$w" unit_repo duatic_fixture_unit_a \
         's|  <export>|  <build_depend>duatic_fixture_shared</build_depend>\n\n  <export>|'
     repo "$w" tools_repo duatic_fixture_tools '/duatic_archive_root/d'
     printf '%s\n' "base_repo +git20261125223600.ab12cd3" "unit_repo +git20261124101010.1234567" \
-        "tools_repo +git20261124101010.7654321" > "$w/suffixes.txt"
+        "tools_repo +git20261124101010.7654321" "runtime_repo +git20261124101010.fedcba9" > "$w/suffixes.txt"
     (cd "$w/packaging/workspace" && ./gen_release_set.sh > /dev/null)
 }
 
@@ -90,6 +94,12 @@ t = open(sys.argv[1]).read()
 a, b = t.find("=== duatic_fixture_shared"), t.find("=== duatic_fixture_unit_a")
 sys.exit(not (0 <= a < b))
 PY
+expect "a runtime dependency of a build dependency builds before the dependent" python3 - "$TMP/ordered.out" <<'PY'
+import sys
+t = open(sys.argv[1]).read()
+c, a = t.find("=== duatic_fixture_unit_b"), t.find("=== duatic_fixture_unit_a")
+sys.exit(not (0 <= c < a))
+PY
 shared_deb="$out/ros-jazzy-duatic-fixture-shared_${SHARED_V}_${arch}.deb"
 unit_deb="$out/ros-jazzy-duatic-fixture-unit-a_${UNIT_V}_${arch}.deb"
 expect "each package carries its repository's suffix and the revision" test -f "$shared_deb" -a -f "$unit_deb"
@@ -102,12 +112,13 @@ expect "each package keeps its log" test -s "$out/logs/duatic_fixture_shared.log
 expect "a package declaring no root is listed as skipped" grep -qE "skipped.*duatic_fixture_tools" "$TMP/ordered.out"
 expect "a package declaring no root is not built" \
     test ! -e "$out/logs/duatic_fixture_tools.log" -a -z "$(find "$out" -name '*fixture-tools*')"
-expect "the manifest lists both builds with their roots, files and seconds" \
-    python3 - "$out" jazzy "$arch" "$SHARED_V" "$UNIT_V" <<'PY'
+expect "the manifest lists every build with its root, files and seconds" \
+    python3 - "$out" jazzy "$arch" "$SHARED_V" "$UNIT_V" "$RUNTIME_V" <<'PY'
 import json, os, sys
-out, distro, arch, sv, uv = sys.argv[1:]
+out, distro, arch, sv, uv, rv = sys.argv[1:]
 m = json.load(open(os.path.join(out, "manifest.json")))
-want = {"duatic_fixture_shared": ("public", sv, "ros-jazzy-duatic-fixture-shared"),
+want = {"duatic_fixture_unit_b": ("public", rv, "ros-jazzy-duatic-fixture-unit-b"),
+        "duatic_fixture_shared": ("public", sv, "ros-jazzy-duatic-fixture-shared"),
         "duatic_fixture_unit_a": ("units/unit-a", uv, "ros-jazzy-duatic-fixture-unit-a")}
 assert isinstance(m, list) and [e["package"] for e in m] == list(want), m
 for e in m:
@@ -196,7 +207,7 @@ expect "a public package depending on a gated root gets no client certificate" \
     withheld duatic_fixture_extra 'ARCHIVE_CLIENT|client\.(crt|key)'
 expect "a package declaring no root is not handed to docker" test ! -e "$TMP/args/duatic_fixture_tools"
 expect "the manifest lists the stubbed builds" python3 -c \
-    'import json, sys; sys.exit([e["package"] for e in json.load(open(sys.argv[1]))] != ["duatic_fixture_shared", "duatic_fixture_unit_a", "duatic_fixture_extra"])' \
+    'import json, sys; sys.exit([e["package"] for e in json.load(open(sys.argv[1]))] != ["duatic_fixture_unit_b", "duatic_fixture_shared", "duatic_fixture_unit_a", "duatic_fixture_extra"])' \
     "$out/manifest.json"
 
 got=0; stubbed STUB_FAIL=duatic_fixture_shared STOP_ON_FAILURE=0 || got=$?
@@ -221,6 +232,20 @@ got=0; stubbed || got=$?
 expect "a repository missing from VERSION_SUFFIXES is refused before any build" \
     test "$got" != 0 -a -z "$(ls "$TMP/args")"
 expect "the refusal names the repository" grep -qE "FATAL: .*unit_repo" "$TMP/stubbed.out"
+
+# ---------------------------------------------------------------- a cycle through runtime dependencies
+w="$TMP/cycle"
+workspace "$w"
+sed -i 's|  <export>|  <exec_depend>duatic_fixture_shared</exec_depend>\n\n  <export>|' \
+    "$w/packaging/workspace/src/runtime_repo/duatic_fixture_unit_b/package.xml"
+(cd "$w/packaging/workspace" && ./gen_release_set.sh > /dev/null)
+rm -f "$TMP/args"/*
+got=0
+(cd "$w/packaging/workspace" && PATH="$TMP/bin:$PATH" STUB_ARGS="$TMP/args" VERSION_SUFFIXES="$w/suffixes.txt" \
+    ./build_all.sh) > "$TMP/cycle.out" 2>&1 || got=$?
+expect "a cycle through runtime dependencies still builds" [ "$got" = 0 ]
+expect "a cycle through runtime dependencies is reported as one" \
+    grep -qE "cycle through runtime dependencies: .*duatic_fixture_shared -> duatic_fixture_unit_b" "$TMP/cycle.out"
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

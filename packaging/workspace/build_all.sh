@@ -77,13 +77,13 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 : > "$work/manifest.tsv"
 
-# Topological order over the release set, from the <depend>/<build_depend> each package declares.
+# Topological order over the release set, from the build and runtime dependencies each package declares.
 # One line per package: "build", name, repository, kind, root, whether the root is gated, suffix.
 PLAN="$(python3 - "$HERE" "${VERSION_SUFFIXES:-}" <<'PY'
 import sys, pathlib, xml.etree.ElementTree as ET
 here, suffix_file = pathlib.Path(sys.argv[1]), sys.argv[2]
 wanted = set(here.joinpath('packages.txt').read_text().split())
-deps, where, kinds, roots, gated = {}, {}, {}, {}, set()
+deps, build, where, kinds, roots, gated = {}, {}, {}, {}, {}, set()
 for px in (here / 'src').rglob('package.xml'):
     if '.git' in px.parts: continue
     try: r = ET.parse(px).getroot()
@@ -94,8 +94,12 @@ for px in (here / 'src').rglob('package.xml'):
     if root not in ('', 'public'): gated.add(root)
     if n not in wanted: continue
     d = set()
-    # Build-time only: exec-only dependencies need not exist when this package compiles.
     for tag in ('depend', 'build_depend', 'buildtool_depend', 'build_export_depend'):
+        for e in r.findall(tag):
+            if e.text and e.text.strip() in wanted: d.add(e.text.strip())
+    build[n] = set(d)
+    # Runtime too: installing a build dependency installs its runtime dependencies, built first.
+    for tag in ('exec_depend', 'run_depend'):
         for e in r.findall(tag):
             if e.text and e.text.strip() in wanted: d.add(e.text.strip())
     deps[n] = d
@@ -108,7 +112,10 @@ order, seen, marked = [], set(), set()
 def visit(n, chain=()):
     if n in seen: return
     if n in marked:                      # a cycle would otherwise recurse forever
-        print(f"# cycle: {' -> '.join(chain + (n,))}", file=sys.stderr); return
+        loop = chain[chain.index(n):] + (n,)
+        runtime = any(b not in build[a] for a, b in zip(loop, loop[1:]))
+        print(f"# cycle{' through runtime dependencies' if runtime else ''}: {' -> '.join(loop)}", file=sys.stderr)
+        return
     marked.add(n)
     for d in sorted(deps.get(n, ())): visit(d, chain + (n,))
     marked.discard(n); seen.add(n); order.append(n)
