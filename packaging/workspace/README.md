@@ -37,10 +37,9 @@ with one entry per package built:
 
 The keyring and the client certificate are mounted read-only into the builds that use them. A gated
 root is any root other than `public` that a package under `src/` declares. Only the build of a
-package in a gated root, or depending on a package in one through packages of the set, gets the
-client certificate. Every other build gets `ARCHIVE_URL` without the gated roots, recognized as the
-URLs ending in the root, which is how the archive serves them. Dependencies outside the set are not
-looked at, so a package needing one from a gated root has to be in a gated root itself.
+package in a gated root gets the client certificate. Every other build gets `ARCHIVE_URL` without
+the gated roots, recognized as the URLs ending in the root, which is how the archive serves them, so
+a package outside the gated roots that depends on a gated package fails to build.
 
 ## Isolation
 

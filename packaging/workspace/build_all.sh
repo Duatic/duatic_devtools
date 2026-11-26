@@ -34,6 +34,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG="$(cd "$HERE/.." && pwd)"   # the packaging/ directory, not the repository root
 
 fatal() { echo "FATAL: $*" >&2; exit 1; }
+# A run that stops early leaves no manifest of an earlier run behind.
+rm -f "$PKG/archive/out/manifest.json"
 
 # The build matrix is (ROS distro, Ubuntu release); one pair at a time here. The base image ties
 # the two together, so a distro without its matching image builds against the wrong libc.
@@ -48,6 +50,8 @@ ROSDEP_FILE="${ROSDEP_FILE:-rosdep-${ROS_DISTRO_TARGET}.yaml}"
 STOP_ON_FAILURE="${STOP_ON_FAILURE:-1}"
 case "$STOP_ON_FAILURE" in 0 | 1) ;; *) fatal "STOP_ON_FAILURE is '$STOP_ON_FAILURE', not 0 or 1" ;; esac
 ARCHIVE_CHANNELS="${ARCHIVE_CHANNELS:-stable}"
+# The same rule as build_pkg.sh, checked before any build.
+if [ -n "${DEB_REVISION:-}" ] && ! [[ "$DEB_REVISION" =~ ^[0-9]+$ ]]; then fatal "DEB_REVISION '$DEB_REVISION' is not digits"; fi
 [ -z "${VERSION_SUFFIXES:-}" ] || [ -f "$VERSION_SUFFIXES" ] || fatal "VERSION_SUFFIXES=$VERSION_SUFFIXES does not exist"
 # Mounted into each build as single files, so they have to exist: docker would create a directory.
 if [ -n "${ARCHIVE_URL:-}" ]; then
@@ -74,12 +78,12 @@ trap 'rm -rf "$work"' EXIT
 : > "$work/manifest.tsv"
 
 # Topological order over the release set, from the <depend>/<build_depend> each package declares.
-# One line per package: "build", name, repository, kind, root, whether it needs a gated root, suffix.
+# One line per package: "build", name, repository, kind, root, whether the root is gated, suffix.
 PLAN="$(python3 - "$HERE" "${VERSION_SUFFIXES:-}" <<'PY'
 import sys, pathlib, xml.etree.ElementTree as ET
 here, suffix_file = pathlib.Path(sys.argv[1]), sys.argv[2]
 wanted = set(here.joinpath('packages.txt').read_text().split())
-deps, uses, where, kinds, roots, gated = {}, {}, {}, {}, {}, set()
+deps, where, kinds, roots, gated = {}, {}, {}, {}, set()
 for px in (here / 'src').rglob('package.xml'):
     if '.git' in px.parts: continue
     try: r = ET.parse(px).getroot()
@@ -95,9 +99,6 @@ for px in (here / 'src').rglob('package.xml'):
         for e in r.findall(tag):
             if e.text and e.text.strip() in wanted: d.add(e.text.strip())
     deps[n] = d
-    # Runtime too: installing a dependency installs what it depends on.
-    uses[n] = d | {e.text.strip() for t in ('exec_depend', 'run_depend', 'buildtool_export_depend')
-                   for e in r.findall(t) if e.text and e.text.strip() in wanted}
     where[n] = px.parent.relative_to(here / 'src').parts[0]
     kinds[n] = (r.findtext('export/duatic_package_kind') or '').strip() or 'ros'
     roots[n] = root
@@ -123,25 +124,19 @@ if suffix_file:
 routed = [n for n in order if roots[n]]
 missing = sorted({where[n] for n in routed if suffix_file and where[n] not in suffixes})
 if missing: sys.exit(f"FATAL: VERSION_SUFFIXES has no suffix for {', '.join(missing)}")
-
-def reach(n, found):
-    for d in uses[n] - found:
-        found.add(d); reach(d, found)
-    return found
 for g in sorted(gated): print(f"gated\t{g}")
 for n in order:
     if not roots[n]: print(f"skip\t{n}")
 for n in routed:
-    needs = any(roots[m] in gated for m in reach(n, {n}))
-    print('\t'.join(('build', n, where[n], kinds[n], roots[n], str(int(needs)), suffixes.get(where[n], ''))))
+    print('\t'.join(('build', n, where[n], kinds[n], roots[n], str(int(roots[n] in gated)), suffixes.get(where[n], ''))))
 PY
 )" || exit 1
 grep -q '^build' <<< "$PLAN" || fatal "nothing to build: no package in packages.txt declares <duatic_archive_root>"
 
 skipped="$(awk -F'\t' '$1 == "skip" { printf " %s", $2 }' <<< "$PLAN")"
 [ -z "$skipped" ] || echo "skipped, declaring no <duatic_archive_root>:$skipped"
-# A build needing no gated root reads only the other roots, without the client certificate; a
-# gated root's URL ends in the root.
+# A package outside the gated roots builds against the other roots only, without the client
+# certificate, so a dependency on a gated package fails its build. A gated root's URL ends in the root.
 open_urls=""
 for url in ${ARCHIVE_URL:-}; do
     keep=1
@@ -223,12 +218,12 @@ while IFS=$'\t' read -r what pkg repo kind root gated suffix; do
     else
         echo "    FAILED: $log"; failed=$((failed+1)); failures="$failures $pkg"
         if [ "$STOP_ON_FAILURE" = 1 ]; then
-            write_manifest
+            write_manifest || { rm -f "$OUT/manifest.json"; fatal "could not write $OUT/manifest.json"; }
             fatal "$pkg did not build; stopped, so nothing after it in the order was attempted"
         fi
     fi
 done <<< "$PLAN"
-write_manifest
+write_manifest || { rm -f "$OUT/manifest.json"; fatal "could not write $OUT/manifest.json"; }
 echo
 echo "  $built built, $failed failed"
 [ -n "$failures" ] && echo "  failures:$failures"

@@ -158,6 +158,7 @@ for a in "$@"; do
 done
 printf '%s\n' "$@" > "$STUB_ARGS/$pkg"
 case " ${STUB_FAIL:-} " in *" $pkg "*) exit 1 ;; esac
+case " ${STUB_NODEB:-} " in *" $pkg "*) touch "$o/ros-jazzy-${pkg//_/-}-dbgsym_0.1.0-0noble_amd64.ddeb"; exit 0 ;; esac
 touch "$o/ros-jazzy-${pkg//_/-}_0.1.0-0noble_amd64.deb"
 STUB
 chmod +x "$TMP/bin/docker"
@@ -189,8 +190,10 @@ expect "a public package without gated dependencies gets no client certificate" 
 expect "a package in a gated root reads every root" given duatic_fixture_unit_a "ARCHIVE_URL=$public $gated"
 expect "a package in a gated root gets the client certificate, read-only" \
     given duatic_fixture_unit_a "$TMP/client.key:/archive/client.key:ro"
-expect "a package depending on a gated root gets the client certificate" \
-    given duatic_fixture_extra "ARCHIVE_CLIENT_CERT=/archive/client.crt"
+expect "a public package depending on a gated root reads only the open roots" \
+    given duatic_fixture_extra "ARCHIVE_URL=$public"
+expect "a public package depending on a gated root gets no client certificate" \
+    withheld duatic_fixture_extra 'ARCHIVE_CLIENT|client\.(crt|key)'
 expect "a package declaring no root is not handed to docker" test ! -e "$TMP/args/duatic_fixture_tools"
 expect "the manifest lists the stubbed builds" python3 -c \
     'import json, sys; sys.exit([e["package"] for e in json.load(open(sys.argv[1]))] != ["duatic_fixture_shared", "duatic_fixture_unit_a", "duatic_fixture_extra"])' \
@@ -199,6 +202,19 @@ expect "the manifest lists the stubbed builds" python3 -c \
 got=0; stubbed STUB_FAIL=duatic_fixture_shared STOP_ON_FAILURE=0 || got=$?
 expect "with STOP_ON_FAILURE=0 the run goes on past a failure" test -e "$TMP/args/duatic_fixture_extra"
 expect "with STOP_ON_FAILURE=0 a failure still fails the run" [ "$got" != 0 ]
+
+echo '[{"package": "stale"}]' > "$out/manifest.json"
+got=0; stubbed STUB_NODEB=duatic_fixture_shared || got=$?
+expect "a manifest that cannot be written fails the run" test "$got" != 0
+expect "the failure names the manifest" grep -qE "FATAL: .*manifest" "$TMP/stubbed.out"
+expect "no stale manifest is left behind" test ! -e "$out/manifest.json"
+
+echo '[{"package": "stale"}]' > "$out/manifest.json"
+got=0; stubbed DEB_REVISION=1a || got=$?
+expect "a revision that is not digits is refused before any build" \
+    test "$got" != 0 -a -z "$(ls "$TMP/args")"
+expect "the revision refusal says why" grep -qF "FATAL: DEB_REVISION" "$TMP/stubbed.out"
+expect "a refused run leaves no stale manifest" test ! -e "$out/manifest.json"
 
 sed -i '/^unit_repo /d' "$w/suffixes.txt"
 got=0; stubbed || got=$?
