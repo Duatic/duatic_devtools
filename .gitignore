@@ -12,6 +12,7 @@ packaging/tests/rosdep/
 # Clones and build output
 packaging/workspace/src/
 packaging/workspace/staging/
+packaging/workspace/.work.*/
 packaging/archive/out/
 packaging/tests/out/
 packaging/archive/dist/

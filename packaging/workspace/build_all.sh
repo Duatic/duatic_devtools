@@ -73,7 +73,8 @@ LOGS="$OUT/logs"
 STAGING="$HERE/staging"
 mkdir -p "$OUT" "$LOGS" "$STAGING"
 rm -f "$LOGS"/*.log
-work="$(mktemp -d)"
+# Inside the workspace: the builds mount it, and a Docker daemon on another host shares only that.
+work="$(mktemp -d "$HERE/.work.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 : > "$work/manifest.tsv"
 
@@ -198,7 +199,8 @@ while IFS=$'\t' read -r what pkg repo kind root gated suffix; do
     mkdir "$work/$pkg"
     printf '=== %-42s (%s, %s)\n' "$pkg" "$repo" "$root"
     start=$SECONDS
-    if docker run --rm -i \
+    status=0
+    docker run --rm -i \
         -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
         -e ROSDEP_YAML="/rosdep/$ROSDEP_FILE" \
         -e ROS_DISTRO="$ROS_DISTRO_TARGET" \
@@ -213,7 +215,12 @@ while IFS=$'\t' read -r what pkg repo kind root gated suffix; do
         -v "$STAGING:/staging" \
         -v "$work/$pkg:/out" \
         "$image" \
-        /builder/build_pkg.sh "$pkg" < /dev/null > "$log" 2>&1; then
+        /builder/build_pkg.sh "$pkg" < /dev/null > "$log" 2>&1 || status=$?
+    if [ "$status" = 0 ] && ! ls "$work/$pkg"/*.deb >/dev/null 2>&1; then
+        echo "build_all.sh: the build succeeded, but no .deb reached $work/$pkg, which it mounts as /out" >> "$log"
+        status=1
+    fi
+    if [ "$status" = 0 ]; then
         seconds=$((SECONDS - start))
         # Into out/, and into staging so the next package can build against it. .ddeb too, since a
         # *.deb glob misses debug packages.
