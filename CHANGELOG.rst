@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+2.0.0 (2026-11-27)
+------------------
+* feat(archive)!: builds of main publish to nightly, ordered workspace builds (#53)
+
 1.16.0 (2026-11-19)
 -------------------
 * feat(archive): let a key mirror named upstream packages into public (#48)
