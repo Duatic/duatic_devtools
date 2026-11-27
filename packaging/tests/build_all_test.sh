@@ -206,6 +206,8 @@ expect "a public package depending on a gated root reads only the open roots" \
 expect "a public package depending on a gated root gets no client certificate" \
     withheld duatic_fixture_extra 'ARCHIVE_CLIENT|client\.(crt|key)'
 expect "a package declaring no root is not handed to docker" test ! -e "$TMP/args/duatic_fixture_tools"
+expect "a build's /out is inside the workspace" \
+    grep -qE "^$w/packaging/workspace/\.work\.[^/]+/duatic_fixture_shared:/out\$" "$TMP/args/duatic_fixture_shared"
 expect "the manifest lists the stubbed builds" python3 -c \
     'import json, sys; sys.exit([e["package"] for e in json.load(open(sys.argv[1]))] != ["duatic_fixture_unit_b", "duatic_fixture_shared", "duatic_fixture_unit_a", "duatic_fixture_extra"])' \
     "$out/manifest.json"
@@ -216,9 +218,11 @@ expect "with STOP_ON_FAILURE=0 a failure still fails the run" [ "$got" != 0 ]
 
 echo '[{"package": "stale"}]' > "$out/manifest.json"
 got=0; stubbed STUB_NODEB=duatic_fixture_shared || got=$?
-expect "a manifest that cannot be written fails the run" test "$got" != 0
-expect "the failure names the manifest" grep -qE "FATAL: .*manifest" "$TMP/stubbed.out"
-expect "no stale manifest is left behind" test ! -e "$out/manifest.json"
+expect "a build that hands back no .deb fails the run" test "$got" != 0
+expect "and its log says so" grep -qF "no .deb reached" "$out/logs/duatic_fixture_shared.log"
+expect "the manifest lists only what built before it" python3 -c \
+    'import json, sys; sys.exit([e["package"] for e in json.load(open(sys.argv[1]))] != ["duatic_fixture_unit_b"])' \
+    "$out/manifest.json"
 
 echo '[{"package": "stale"}]' > "$out/manifest.json"
 got=0; stubbed DEB_REVISION=1a || got=$?
