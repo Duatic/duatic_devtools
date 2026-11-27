@@ -2,6 +2,10 @@
 Changelog
 ^^^^^^^^^
 
+2.0.1 (2026-11-27)
+------------------
+* fix(workspace): keep each build's output where the Docker daemon can reach it (#55)
+
 2.0.0 (2026-11-27)
 ------------------
 * feat(archive)!: builds of main publish to nightly, ordered workspace builds (#53)
