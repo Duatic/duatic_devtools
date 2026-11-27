@@ -44,7 +44,7 @@
 # switches a key may make, as <from>:<to>, and a request of PROMOTE=<from>:<to> makes one in the
 # key's roots instead of delivering anything:
 #
-#   command="CHANNELS='stable edge' PROMOTIONS='edge:nightly' ... /usr/local/bin/publish-gate public",...
+#   command="CHANNELS='stable nightly' ... /usr/local/bin/publish-gate public",...
 #
 # SETS names the product lines a key may make set releases into, and a request of SET=<line> copies
 # the releases its specs name from stable into that line instead of delivering anything:

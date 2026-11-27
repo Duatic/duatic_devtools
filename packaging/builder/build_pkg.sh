@@ -34,6 +34,11 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 PKG="${1:?usage: build_pkg.sh <package_name>}"
+# Replaces bloom's Debian revision with <DEB_REVISION><ubuntu release>, e.g. 202611260200noble.
+if [ -n "${DEB_REVISION:-}" ] && ! [[ "$DEB_REVISION" =~ ^[0-9]+$ ]]; then
+    echo "FATAL: DEB_REVISION '$DEB_REVISION' is not digits" >&2
+    exit 1
+fi
 SRC=/src            # the repository, mounted read-write
 OUT=/out            # where .debs are copied out to
 BUILD=/tmp/build
@@ -384,6 +389,13 @@ if [ -n "${DEB_VERSION_SUFFIX:-}" ]; then
         || { echo "FATAL: DEB_VERSION_SUFFIX '$DEB_VERSION_SUFFIX' must start with + or ~" >&2; exit 1; }
     sed -i -E "1s/^([^ ]+) \(([^-)]+)-/\1 (\2${DEB_VERSION_SUFFIX}-/" debian/changelog
     echo "--- version $(dpkg-parsechangelog -S Version)"
+fi
+if [ -n "${DEB_REVISION:-}" ]; then
+    sed -i -E "1s/^([^ ]+) \(([^)]*)-[^-)]*\)/\1 (\2-${DEB_REVISION}${OS_VERSION})/" debian/changelog
+    version="$(dpkg-parsechangelog -S Version)"
+    [ "${version##*-}" = "$DEB_REVISION$OS_VERSION" ] \
+        || { echo "FATAL: version $version does not end in -$DEB_REVISION$OS_VERSION" >&2; exit 1; }
+    echo "--- version $version"
 fi
 
 # The commit this package was built from. dpkg-gencontrol copies XB- fields into the binary

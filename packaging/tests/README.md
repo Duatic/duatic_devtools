@@ -20,6 +20,7 @@ publish_gate_test.sh      publish-gate passes only permitted roots and distros
 lines_test.sh             product lines take patches, set releases and patches from stable
 archive_rosdep_test.sh    archive_rosdep.sh maps the dependencies an archive publishes
 archive_build_test.sh     build_pkg.sh against signed archives, one gated, with a suite missing, in docker
+build_all_test.sh         workspace/build_all.sh builds a set in order into a manifest, and stops at a failure, in docker
 ```
 
 ## The fixtures

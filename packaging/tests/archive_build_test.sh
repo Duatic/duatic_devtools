@@ -23,7 +23,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Build duatic_probe_exec with build_pkg.sh against a signed local archive that publishes
-# ros-jazzy-duatic-helper-msgs in noble-stable and has no noble-edge suite, and against a root
+# ros-jazzy-duatic-helper-msgs in noble-stable and has no noble-nightly suite, and against a root
 # served only to a client certificate that publishes it beside an open root that does not.
 # Needs docker.
 #

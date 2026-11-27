@@ -11,6 +11,40 @@ committed, tagged or pushed from it.
 ./build_all.sh           # build in dependency order, through staging/
 ```
 
+## Building the set
+
+`build_all.sh` builds every package in `packages.txt` that declares a `<duatic_archive_root>`, one
+container per package, in dependency order. A package declaring none is skipped and listed as such.
+A package that declares one but depends, to build or to run, on a skipped one is refused before any
+build, naming each such pair, since its package would not install.
+Each build installs the packages built before it from `staging/`. The order follows runtime
+dependencies as well as build dependencies, since installing a build dependency installs its runtime
+dependencies.
+
+Output goes to `../archive/out/`: the packages, `logs/<package>.log`, and `manifest.json`, a list
+with one entry per package built:
+
+```json
+{"package": "my_pkg", "version": "1.2.0+git20261125223600.ab12cd3-202611260200noble", "root": "public",
+ "distro": "jazzy", "arch": "amd64", "files": ["ros-jazzy-my-pkg_1.2.0+git20261125223600.ab12cd3-202611260200noble_amd64.deb"],
+ "seconds": 48}
+```
+
+| Variable | |
+|---|---|
+| `ROS_DISTRO_TARGET`, `OS_VERSION`, `BUILD_IMAGE` | the pair built and its image; by default `jazzy`, `noble`, `ros:<distro>-ros-base` |
+| `VERSION_SUFFIXES` | a file of `<repository> <suffix>` lines, the repository named as its directory in `src/`. Each package is built with its repository's suffix as `DEB_VERSION_SUFFIX`; a repository without one is refused before any build |
+| `DEB_REVISION` | digits replacing the Debian revision: `<version><suffix>-<DEB_REVISION><ubuntu>` |
+| `ARCHIVE_URL`, `ARCHIVE_KEYRING`, `ARCHIVE_CHANNELS` | archive roots dependencies outside the set resolve from, as for `builder/build_pkg.sh`; channels default to `stable` |
+| `ARCHIVE_CLIENT_CERT`, `ARCHIVE_CLIENT_KEY` | the client certificate for gated roots |
+| `STOP_ON_FAILURE` | `1`, the default, stops at the first failed package and names it and its log; `0` builds the rest and fails at the end |
+
+The keyring and the client certificate are mounted read-only into the builds that use them. A gated
+root is any root other than `public` that a package under `src/` declares. Only the build of a
+package in a gated root gets the client certificate. Every other build gets `ARCHIVE_URL` without
+the gated roots, recognized as the URLs ending in the root, which is how the archive serves them, so
+a package outside the gated roots that depends on a gated package fails to build.
+
 ## Isolation
 
 Four guards, applied by `clone_all.sh` and checked by `verify_isolation.sh`:

@@ -49,7 +49,7 @@ jobs:
 
           has() { echo "$changed" | grep -qE "$1"; }
           {
-              has '^packaging/(builder|tests)/'        && echo "builder=true" || echo "builder=false"
+              has '^packaging/(builder|tests|workspace)/' && echo "builder=true" || echo "builder=false"
               has '^packaging/(archive/|tests/(open_roots|publish_gate|lines|system_suites|setup_package)_test\.sh$)' && echo "archive=true" || echo "archive=false"
               has '^packaging/tests/'                  && echo "tests=true"   || echo "tests=false"
               has '\.sh$'                              && echo "shell=true"   || echo "shell=false"
@@ -134,6 +134,10 @@ jobs:
       - name: Build a system package
         if: matrix.ros_distro == 'jazzy'
         run: packaging/tests/system_build_test.sh
+
+      - name: Build a release set in order
+        if: matrix.ros_distro == 'jazzy'
+        run: packaging/tests/build_all_test.sh
 
       - name: Generate the rosdep mapping for ${{ matrix.ros_distro }}
         env:
