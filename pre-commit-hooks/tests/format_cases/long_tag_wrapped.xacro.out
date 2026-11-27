@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <link name="a"/>
+
+  <joint name="a_very_long_joint_name_that_takes_space"
+         type="revolute"
+         extra_one="aaaaaaaaaaaaaaaa"
+         extra_two="bbbbbbbbbbbbbbbb"/>
+
+</robot>

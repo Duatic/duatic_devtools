@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!DOCTYPE robot [<!ENTITY pi "3.14">]>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="s" value="a &amp; b &lt; c"/>
+  <xacro:property name="e" value="&pi;"/>
+
+</robot>

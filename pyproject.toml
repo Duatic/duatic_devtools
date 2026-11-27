@@ -8,17 +8,19 @@ version = "0.1.0"
 description = "Duatic pre-commit hooks (shared and custom)"
 readme = "pre-commit-hooks/README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["lxml>=5"]
 
 [project.optional-dependencies]
-dev = ["pyyaml", "pre-commit"]
+dev = ["pyyaml", "pre-commit", "pytest"]
 
 [project.scripts]
 duatic-clang-format = "duatic_clang_format.main:main"
+format-xacro = "duatic_xacro_hooks.format_xacro:main"
+check-xacro = "duatic_xacro_hooks.check_xacro:main"
 
 [tool.setuptools.packages.find]
 where = ["pre-commit-hooks"]
-include = ["duatic_clang_format*"]
+include = ["duatic_clang_format*", "duatic_xacro_hooks*"]
 
 [tool.setuptools.data-files]
 "share/duatic_devtools_hooks" = [".clang-format"]

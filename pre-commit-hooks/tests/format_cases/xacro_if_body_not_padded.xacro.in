@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:if value="1">
+
+<link name="a"/>
+
+</xacro:if>
+<xacro:unless value="1"><xacro:m a="1"/><xacro:m a="2"/><xacro:n a="1"/></xacro:unless>
+</robot>

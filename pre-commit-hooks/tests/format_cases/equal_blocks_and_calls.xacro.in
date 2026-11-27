@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:macro name="m" params="a"><link name="${a}"/></xacro:macro>
+<xacro:macro name="n" params="a"><link name="${a}"/></xacro:macro>
+<xacro:m a="1"/>
+<xacro:m a="2"/>
+<xacro:n a="3"/>
+<!-- own comment -->
+<xacro:n a="4"/>
+</robot>

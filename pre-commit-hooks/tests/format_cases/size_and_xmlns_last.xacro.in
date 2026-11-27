@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" xmlns:gz="http://gazebo" name="r">
+<box size="1 2 3"/>
+<xacro:m size="1" a="2"/>
+<foo size="1" a="2" b="3"/>
+</robot>

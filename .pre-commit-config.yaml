@@ -13,7 +13,7 @@
 # See https://github.com/pre-commit/pre-commit
 
 # Vendored code is kept byte-identical to upstream
-exclude: ^third_party/
+exclude: ^(third_party/|pre-commit-hooks/tests/format_cases/)
 
 repos:
   # Standard hooks
@@ -92,10 +92,25 @@ repos:
         args: ['--write-changes', '-L bootup,assertIn,fpr']
         exclude: \.(svg|pyc|drawio)$
 
-  # The ament linters, which need a ROS installation (hence `language: system`). They are
-  # skipped in CI, which runs the `manual` stage only.
+  # Hooks that this repository provides itself (and the ament ones, which need a ROS installation).
+  # Console scripts of pyproject.toml are installed with the package, hence `language: python`
+  # in the exported manifest (here they need `pip install -e .`).
   - repo: local
     hooks:
+      - id: check-xacro
+        name: check xacro
+        description: Check xacro files (properties, args, blocks, includes, duplicates, ...).
+        entry: check-xacro
+        language: system
+        files: \.xacro$
+
+      - id: format-xacro
+        name: format xacro
+        description: Format xacro files (indentation, line length, attribute order, includes, ...).
+        entry: format-xacro
+        language: system
+        files: \.xacro$
+
       - id: ament_cppcheck
         name: ament_cppcheck
         description: Static code analysis of C/C++ files.

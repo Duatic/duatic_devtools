@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+
+<!--    License    header
+   untouched   -->
+
+
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <link name="a"/>
+
+</robot>

@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot name="r" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<!-- 90° angle, größer -->
+<link name="ü">
+<xacro:property name="deg" value="°"/></link>
+</robot>
