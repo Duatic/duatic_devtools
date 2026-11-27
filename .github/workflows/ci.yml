@@ -30,6 +30,7 @@ jobs:
       archive: ${{ steps.filter.outputs.archive }}
       tests: ${{ steps.filter.outputs.tests }}
       shell: ${{ steps.filter.outputs.shell }}
+      hooks: ${{ steps.filter.outputs.hooks }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,6 +54,7 @@ jobs:
               has '^packaging/(archive/|tests/(open_roots|publish_gate|lines|system_suites|setup_package)_test\.sh$)' && echo "archive=true" || echo "archive=false"
               has '^packaging/tests/'                  && echo "tests=true"   || echo "tests=false"
               has '\.sh$'                              && echo "shell=true"   || echo "shell=false"
+              has '^(pre-commit-hooks/|\.pre-commit-config\.yaml$|\.pre-commit-hooks\.yaml$|\.clang-format$|pyproject\.toml$)' && echo "hooks=true" || echo "hooks=false"
           } >> "$GITHUB_OUTPUT"
 
   format:
@@ -93,6 +95,28 @@ jobs:
           packaging/tests/make_fixtures.sh
           git diff --exit-code -- packaging/tests/fixtures \
             || { echo "::error::fixtures differ from make_fixtures.sh, commit the regenerated tree"; exit 1; }
+
+  # .pre-commit-hooks.yaml is generated from .pre-commit-config.yaml and committed, so the generator
+  # and the file have to agree. Consumers get the committed file, not the config that the format job
+  # runs, so every exported hook is also installed and run here, as a consumer's pre-commit would.
+  manifest:
+    needs: changes
+    if: needs.changes.outputs.hooks == 'true'
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Regenerate and compare
+        run: |
+          pip install -e '.[dev]'
+          python3 pre-commit-hooks/generate_hooks.py
+          git diff --exit-code -- .pre-commit-hooks.yaml \
+            || { echo "::error::.pre-commit-hooks.yaml differs from generate_hooks.py, run it and commit the result"; exit 1; }
+
+      - name: Run the exported hooks
+        run: pre-commit try-repo . --all-files --hook-stage manual
 
   # A real bloom-generate and dpkg-buildpackage, producing a real .deb.
   builder:

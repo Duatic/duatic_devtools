@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "duatic-devtools-hooks"
+version = "0.1.0"
+description = "Duatic pre-commit hooks (shared and custom)"
+readme = "pre-commit-hooks/README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pyyaml", "pre-commit"]
+
+[project.scripts]
+duatic-clang-format = "duatic_clang_format.main:main"
+
+[tool.setuptools.packages.find]
+where = ["pre-commit-hooks"]
+include = ["duatic_clang_format*"]
+
+[tool.setuptools.data-files]
+"share/duatic_devtools_hooks" = [".clang-format"]

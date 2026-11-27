@@ -25,27 +25,65 @@ archive serves every ROS distro built for that Ubuntu.
 
 ## formatting
 
-`.pre-commit-config.yaml` is the configuration every repository runs. Python is formatted by `black`
+`.pre-commit-config.yaml` defines the hooks every repository runs. Python is formatted by `black`
 at 100 columns, with `flake8` ignoring what black already decides. Line endings are LF and tabs are
 replaced by spaces.
 
-`pre-commit` reads a config only from the root of the repository being checked, so repositories copy
-the file in rather than reference it. Pin a tag rather than `main` to hold a repository to a known
-set of rules:
+This repository exports these hooks with their options in `.pre-commit-hooks.yaml`, so other
+repositories reference it in their own `.pre-commit-config.yaml` instead of copying files. Pin an
+exact release tag: pre-commit caches each `rev` by name and would not notice a moving tag like `v1`.
+`pre-commit autoupdate` moves the pin to the latest release.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Duatic/duatic_devtools/main/.pre-commit-config.yaml \
-  -o .pre-commit-config.yaml
+```yaml
+repos:
+  - repo: https://github.com/Duatic/duatic_devtools
+    rev: vX.Y.Z  # an exact release tag (from the first one with .pre-commit-hooks.yaml on)
+    hooks:
+      # General
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-xml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+      - id: check-byte-order-marker
+      - id: remove-tabs
+      - id: codespell
+      - id: actionlint
+      # Python and docs
+      - id: check-ast
+      - id: check-docstring-first
+      - id: debug-statements
+      - id: pyupgrade
+      - id: black
+      - id: flake8
+      - id: doc8
+      # C++ and CMake (the ament hooks need a ROS installation and run on commit only)
+      - id: clang-format
+      - id: ament_cppcheck
+      - id: ament_cpplint
+      - id: ament_lint_cmake
 ```
 
-`CONTRIBUTING.md` covers installing and running it. CI runs the same hooks through.
+Every hook ships with entry arguments that enforce the Duatic style (the black line length, LF line endings, the C++ style).
+A repository can still override them by overriding `args` (or `entry`; discouraged) in its own `.pre-commit-config.yaml`.
+The header of `.pre-commit-hooks.yaml` shows how.
 
-`.clang-format` is the C++ style, copied in the same way:
+`CONTRIBUTING.md` covers installing and running pre-commit. CI runs the same configuration through
+the pre-commit workflow of `Duatic/ci-workflows`.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Duatic/duatic_devtools/main/.clang-format \
-  -o .clang-format
-```
+`.clang-format` is the C++ style. The `clang-format` hook installs the one of its `rev` into the root
+of the repository, then runs clang-format as usual, so editors and plain `clang-format` calls use the
+same style. The hook also runs when `.clang-format` or `.pre-commit-config.yaml` change: a `rev` bump
+updates the file, and a local edit is reverted. It overwrites an existing `.clang-format` and fails
+once when it does, to allow staging the file. The hook always formats with the packaged style, so a
+`.clang-format` in a subdirectory is ignored, on purpose, to enforce one common style.
+
+To change a hook, edit `.pre-commit-config.yaml`, run `pre-commit-hooks/generate_hooks.py` (needs
+`pip install -e '.[dev]'`) and commit both files. CI fails if they disagree.
 
 ## Planned
 
